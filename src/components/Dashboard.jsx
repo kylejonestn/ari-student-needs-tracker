@@ -15,7 +15,8 @@ import {
   Send,
   Calendar,
   CheckCircle,
-  FileCheck
+  FileCheck,
+  Printer
 } from "lucide-react";
 
 export default function Dashboard({ students, screenings, updateScreening }) {
@@ -104,7 +105,17 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                 Tennessee Special Education mandate countdowns
               </p>
             </div>
-            <span className="timeline-badge warning" style={{ fontWeight: "700" }}>RCS Schedule</span>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button 
+                className="btn btn-secondary hide-print" 
+                style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                onClick={() => window.print()}
+              >
+                <Printer size={12} />
+                Print Weekly Checklist
+              </button>
+              <span className="timeline-badge warning hide-print" style={{ fontWeight: "700" }}>RCS Schedule</span>
+            </div>
           </div>
 
           <div className="timeline-list">
