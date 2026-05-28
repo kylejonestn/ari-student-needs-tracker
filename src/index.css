@@ -828,10 +828,35 @@ button, input, select, textarea {
    Print Styles for Paper & PDF Generation
    ========================================== */
 @media print {
+  /* Force light theme CSS variables when printing, even if UI is in dark mode */
+  :root, [data-theme="dark"] {
+    --bg-primary: #ffffff !important;
+    --bg-sidebar: #ffffff !important;
+    --bg-card: #ffffff !important;
+    --bg-card-hover: #ffffff !important;
+    
+    --text-main: #334155 !important;
+    --text-muted: #64748b !important;
+    --text-heading: #0f172a !important;
+    
+    --accent-purple: #6366f1 !important;
+    --accent-purple-light: rgba(99, 102, 241, 0.05) !important;
+    --accent-emerald: #10b981 !important;
+    --accent-emerald-light: rgba(16, 185, 129, 0.05) !important;
+    --accent-amber: #f59e0b !important;
+    --accent-amber-light: rgba(245, 158, 11, 0.05) !important;
+    --accent-rose: #f43f5e !important;
+    --accent-rose-light: rgba(244, 63, 94, 0.05) !important;
+
+    --border-color: #cbd5e1 !important;
+    --border-glass: rgba(203, 213, 225, 0.4) !important;
+  }
+
   body {
     background-color: white !important;
     color: black !important;
     font-size: 12pt;
+    zoom: 0.50; /* Shrink scaling to exactly 1/2 size */
   }
   
   /* Hide all non-printable elements */
