@@ -21,7 +21,7 @@ export const driveService = {
     try {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: "https://www.googleapis.com/auth/drive.file", // Only access files this app creates
+        scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send", // Access Drive files and send emails
         callback: (response) => {
           if (response.error) {
             onError(`Auth failed: ${response.error_description || response.error}`);

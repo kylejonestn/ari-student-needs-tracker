@@ -121,6 +121,17 @@ class StudentStore {
     // Load config from localStorage
     const savedClientId = localStorage.getItem("aegis_client_id") || "";
     const savedTheme = localStorage.getItem("aegis_theme") || "light";
+    const savedWorkEmail = localStorage.getItem("aegis_work_email") || "ariel.facilitator@rcschools.net";
+    let savedTeacherEmails = {
+      "Ms. Davis": "davis@rcschools.net",
+      "Mrs. Harrison": "harrison@rcschools.net",
+      "Mr. Thompson": "thompson@rcschools.net",
+      "Mr. Adams": "adams@rcschools.net"
+    };
+    try {
+      const parsed = JSON.parse(localStorage.getItem("aegis_teacher_emails"));
+      if (parsed) savedTeacherEmails = parsed;
+    } catch(e) {}
     
     // Load local cache if offline
     let cachedStudents = null;
@@ -142,6 +153,10 @@ class StudentStore {
       allDataFileId: localStorage.getItem("aegis_all_data_fid") || null,
       parentPortalFileId: localStorage.getItem("aegis_parent_fid") || null,
       
+      // Email parameters
+      workEmail: savedWorkEmail,
+      teacherEmails: savedTeacherEmails,
+
       // Data Arrays
       students: cachedStudents || INITIAL_STUDENTS,
       screenings: cachedScreenings || INITIAL_SCREENINGS,
@@ -180,6 +195,8 @@ class StudentStore {
     if (newState.clientId !== undefined) localStorage.setItem("aegis_client_id", newState.clientId);
     if (newState.allDataFileId) localStorage.setItem("aegis_all_data_fid", newState.allDataFileId);
     if (newState.parentPortalFileId) localStorage.setItem("aegis_parent_fid", newState.parentPortalFileId);
+    if (newState.workEmail !== undefined) localStorage.setItem("aegis_work_email", newState.workEmail);
+    if (newState.teacherEmails !== undefined) localStorage.setItem("aegis_teacher_emails", JSON.stringify(newState.teacherEmails));
     
     // Save database cache in localStorage for instant offline access
     localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
@@ -254,6 +271,13 @@ class StudentStore {
           allDataFileId: fileId,
           students: cloudData.students || [],
           screenings: cloudData.screenings || [],
+          workEmail: cloudData.workEmail || "ariel.facilitator@rcschools.net",
+          teacherEmails: cloudData.teacherEmails || {
+            "Ms. Davis": "davis@rcschools.net",
+            "Mrs. Harrison": "harrison@rcschools.net",
+            "Mr. Thompson": "thompson@rcschools.net",
+            "Mr. Adams": "adams@rcschools.net"
+          },
           syncStatus: "synced",
           flashingGreen: true
         });
@@ -301,7 +325,9 @@ class StudentStore {
       try {
         const payload = {
           students: this.state.students,
-          screenings: this.state.screenings
+          screenings: this.state.screenings,
+          workEmail: this.state.workEmail,
+          teacherEmails: this.state.teacherEmails
         };
 
         // 1. Update all-data.json (Confidential Data)
@@ -479,6 +505,135 @@ class StudentStore {
     });
     this.updateState({ students: updated });
     this.triggerCloudSave();
+  }
+
+  // Send HTML weekly email summary via the Google Gmail API
+  async sendWeeklyEmail() {
+    if (!this.isTokenValid()) {
+      alert("Please connect your Google Account first using settings.");
+      return;
+    }
+
+    this.updateState({ syncStatus: "saving" });
+
+    try {
+      // 1. Calculate matching timelines in the current week (identical to Dashboard layout)
+      const activeTimelines = this.state.students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentName: s.name, type: "Active" })));
+      const screeningTimelines = this.state.screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentName: s.name, type: "Screening" })));
+      const rawTimelines = [...activeTimelines, ...screeningTimelines];
+      
+      const dueThisWeek = rawTimelines.filter(t => {
+        if (t.daysRemaining < 0) return true;
+        if (!t.dueDate) return false;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const currentDay = today.getDay();
+        
+        const startOfWeek = new Date(today);
+        const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+        startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        const dueDateObj = new Date(t.dueDate);
+        dueDateObj.setHours(0, 0, 0, 0);
+        
+        return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
+      });
+
+      // 2. Build email body HTML summary
+      let htmlBody = `
+        <div style="font-family: sans-serif; color: #334155; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; background-color: #ffffff;">
+          <div style="text-align: center; border-bottom: 2px solid #6366f1; padding-bottom: 16px; margin-bottom: 20px;">
+            <h1 style="color: #0f172a; margin: 0; font-size: 22px;">Aegis Weekly Due Summary</h1>
+            <p style="color: #64748b; margin: 4px 0 0; font-size: 13px;">Blackman Middle School Gifted Facilitation Mandates</p>
+          </div>
+          
+          <p style="font-size: 14px; color: #475569; margin-bottom: 20px;">Hi Ariel, here is your consolidated summary of special education timelines and signatures due for the current calendar week:</p>
+      `;
+
+      if (dueThisWeek.length === 0) {
+        htmlBody += `
+          <div style="text-align: center; padding: 30px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; color: #15803d; font-weight: 600; font-size: 14px;">
+            🎉 All Clear! No timelines due or overdue for this calendar week.
+          </div>
+        `;
+      } else {
+        dueThisWeek.forEach(t => {
+          const color = t.status === "overdue" ? "#f43f5e" : t.status === "warning" ? "#d97706" : "#10b981";
+          const bg = t.status === "overdue" ? "#fff1f2" : t.status === "warning" ? "#fef3c7" : "#ecfdf5";
+          const border = t.status === "overdue" ? "#fecdd3" : t.status === "warning" ? "#fde68a" : "#a7f3d0";
+          
+          htmlBody += `
+            <div style="padding: 16px; border-radius: 8px; border: 1px solid ${border}; border-left: 5px solid ${color}; background-color: ${bg}; margin-bottom: 12px; font-size: 13px;">
+              <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 6px;">
+                <span style="color: #0f172a; font-size: 14px;">${t.studentName}</span>
+                <span style="color: ${color}; font-size: 12px; text-transform: uppercase;">
+                  ${t.daysRemaining < 0 ? `${Math.abs(t.daysRemaining)} Days Overdue` : t.daysRemaining === 0 ? "Due Today" : `${t.daysRemaining} Days Left`}
+                </span>
+              </div>
+              <div style="font-weight: 700; margin-bottom: 4px; color: #334155;">[${t.type}] ${t.label}</div>
+              <div style="color: #64748b; font-size: 12px; margin-bottom: 8px; line-height: 1.4;">${t.desc}</div>
+              <div style="font-size: 11px; color: #475569;">Due Date: <strong>${t.dueDate}</strong></div>
+            </div>
+          `;
+        });
+      }
+
+      htmlBody += `
+          <div style="margin-top: 30px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center;">
+            This email was sent from your personal Gmail account to your work inbox using the Google Gmail API integration in Aegis.
+          </div>
+        </div>
+      `;
+
+      // 3. Construct RFC 822 MIME message
+      const to = this.state.workEmail || "ariel.facilitator@rcschools.net";
+      const subject = `[Aegis Weekly Checklist] ${dueThisWeek.length} timelines due or overdue`;
+      
+      const emailContent = [
+        `To: ${to}`,
+        'Content-Type: text/html; charset=utf-8',
+        'MIME-Version: 1.0',
+        `Subject: ${subject}`,
+        '',
+        htmlBody
+      ].join('\r\n');
+
+      // Base64url encode securely
+      const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      // 4. Send email via Google Gmail API
+      const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.state.accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          raw: encodedEmail
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Google API Error: ${response.status} - ${errText}`);
+      }
+
+      this.updateState({ syncStatus: "synced", flashingGreen: true });
+      setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+      alert(`Weekly timeline summary email successfully sent to ${to}!`);
+    } catch (err) {
+      console.error(err);
+      this.updateState({ syncStatus: "error", syncError: `Email send failed: ${err.message}` });
+      alert(`Gmail API failed to send: ${err.message}. Make sure you authorized the 'gmail.send' permission when connecting your Google Drive.`);
+    }
   }
 }
 

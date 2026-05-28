@@ -4,6 +4,7 @@
 
 import React, { useState } from "react";
 import { 
+  store,
   calculateTimelines, 
   getDaysRemaining 
 } from "../utils/studentStore";
@@ -73,8 +74,27 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   };
 
   const handleNudge = (screening) => {
+    const teacherEmails = store.getState().teacherEmails || {};
+    const email = teacherEmails[screening.classroomTeacher] || "teacher@rcschools.net";
+    
+    const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${screening.name}`);
+    const body = encodeURIComponent(
+      `Dear ${screening.classroomTeacher},\n\n` +
+      `I hope you are doing well! As the Gifted Facilitator, I am currently conducting an intellectual screening evaluation for ${screening.name} under our Tennessee 60-calendar-day timeline.\n\n` +
+      `To complete our state-mandated TN K-12 Assessment Scoring Grid, I need your classroom behavior traits checklist (SIGS/Renzulli rating scale points).\n\n` +
+      `Could you please complete the characteristics checklist for ${screening.name} as soon as you have a moment, or reply to this email with your observations?\n\n` +
+      `Thank you so much for your support and partnership!\n\n` +
+      `Best regards,\n` +
+      `Ariel\n` +
+      `Gifted Facilitator\n` +
+      `Blackman Middle School`
+    );
+
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+    window.location.href = mailtoUrl;
+
     updateScreening(screening.id, { nudgeSent: true });
-    pushActivity(`Simulated: Nudge email successfully sent to ${screening.classroomTeacher} for ${screening.name}'s gifted traits checklist.`);
+    pushActivity(`Opened Mailto: Email nudge generated for ${screening.classroomTeacher} (${email}) regarding ${screening.name}.`);
   };
 
   return (
@@ -134,6 +154,14 @@ export default function Dashboard({ students, screenings, updateScreening }) {
               </p>
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button 
+                className="btn btn-primary hide-print" 
+                style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                onClick={() => store.sendWeeklyEmail()}
+              >
+                <Send size={12} />
+                Email Weekly Summary
+              </button>
               <button 
                 className="btn btn-secondary hide-print" 
                 style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}

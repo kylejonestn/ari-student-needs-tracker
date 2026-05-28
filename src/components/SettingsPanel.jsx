@@ -3,6 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
+import { store } from "../utils/studentStore";
 import { Cloud, CloudOff, Info, Key, HelpCircle, Check, RefreshCw, Mail, Calendar } from "lucide-react";
 
 export default function SettingsPanel({ 
@@ -20,6 +21,22 @@ export default function SettingsPanel({
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [calendarSync, setCalendarSync] = useState(true);
   const [showSavedMsg, setShowSavedMsg] = useState(false);
+
+  // Email state variables
+  const [tempWorkEmail, setTempWorkEmail] = useState(store.getState().workEmail);
+  const [teacherEmailsState, setTeacherEmailsState] = useState(store.getState().teacherEmails);
+  const [showEmailSavedMsg, setShowEmailSavedMsg] = useState(false);
+
+  const handleSaveEmails = (e) => {
+    e.preventDefault();
+    store.updateState({
+      workEmail: tempWorkEmail.trim(),
+      teacherEmails: teacherEmailsState
+    });
+    store.triggerCloudSave(); // Debounced save to Google Drive JSON
+    setShowEmailSavedMsg(true);
+    setTimeout(() => setShowEmailSavedMsg(false), 2000);
+  };
 
   const handleSaveClientId = (e) => {
     e.preventDefault();
@@ -192,6 +209,63 @@ export default function SettingsPanel({
                 />
               </div>
             </div>
+          </div>
+
+          {/* Email Settings Configuration */}
+          <div className="glass-panel">
+            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Mail size={18} color="var(--accent-purple)" />
+              Weekly Summary & Teacher Email Routing
+            </h3>
+
+            <form onSubmit={handleSaveEmails}>
+              <div className="form-group">
+                <label>Ariel's Work Email Address</label>
+                <input 
+                  type="email" 
+                  className="input-field" 
+                  style={{ fontSize: "12px" }}
+                  placeholder="e.g. ariel.facilitator@rcschools.net"
+                  value={tempWorkEmail}
+                  onChange={(e) => setTempWorkEmail(e.target.value)}
+                />
+                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                  Your personal weekly due summary will be sent directly to this work address.
+                </p>
+              </div>
+
+              <hr style={{ borderColor: "var(--border-color)", margin: "16px 0" }} />
+
+              <h4 style={{ fontSize: "12px", fontWeight: "700", marginBottom: "12px", color: "var(--text-heading)" }}>
+                Classroom Teacher Email Routing
+              </h4>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                {Object.keys(teacherEmailsState).map(teacher => (
+                  <div key={teacher} style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "10px", alignItems: "center" }}>
+                    <label style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-heading)" }}>{teacher}:</label>
+                    <input 
+                      type="email" 
+                      className="input-field"
+                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
+                      value={teacherEmailsState[teacher]}
+                      onChange={(e) => setTeacherEmailsState({ ...teacherEmailsState, [teacher]: e.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {showEmailSavedMsg && (
+                  <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
+                    ✔ Email configs saved!
+                  </span>
+                )}
+                <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
+                  Save Email Routing
+                </button>
+              </div>
+            </form>
           </div>
         </div>
 
