@@ -271,8 +271,8 @@ class StudentStore {
           allDataFileId: fileId,
           students: cloudData.students || [],
           screenings: cloudData.screenings || [],
-          workEmail: cloudData.workEmail || "ariel.facilitator@rcschools.net",
-          teacherEmails: cloudData.teacherEmails || {
+          workEmail: cloudData.workEmail || this.state.workEmail || "ariel.facilitator@rcschools.net",
+          teacherEmails: cloudData.teacherEmails || this.state.teacherEmails || {
             "Ms. Davis": "davis@rcschools.net",
             "Mrs. Harrison": "harrison@rcschools.net",
             "Mr. Thompson": "thompson@rcschools.net",
@@ -281,6 +281,11 @@ class StudentStore {
           syncStatus: "synced",
           flashingGreen: true
         });
+
+        // Auto-upgrade older cloud file format by saving current configuration to Google Drive
+        if (!cloudData.workEmail || !cloudData.teacherEmails) {
+          this.triggerCloudSave();
+        }
         
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
       } else {
