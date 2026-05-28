@@ -33,11 +33,39 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   const activeTimelines = students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentName: s.name, type: "Active" })));
   const screeningTimelines = screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentName: s.name, type: "Screening" })));
   
-  const allTimelines = [...activeTimelines, ...screeningTimelines].sort((a, b) => a.daysRemaining - b.daysRemaining);
+  const rawTimelines = [...activeTimelines, ...screeningTimelines];
   
-  // Count alert levels
-  const overdueCount = allTimelines.filter(t => t.status === "overdue").length;
-  const warningCount = allTimelines.filter(t => t.status === "warning").length;
+  // Count caseload-wide alert levels
+  const overdueCount = rawTimelines.filter(t => t.status === "overdue").length;
+  const warningCount = rawTimelines.filter(t => t.status === "warning").length;
+
+  // Filter for: Overdue OR Due within the current calendar week (Monday to Sunday)
+  const allTimelines = rawTimelines.filter(t => {
+    // 1. Show overdue items instantly
+    if (t.daysRemaining < 0) return true;
+    
+    // 2. Check if due date falls in the current calendar week (Monday through Sunday)
+    if (!t.dueDate) return false;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday...
+    
+    // Start of week (Monday)
+    const startOfWeek = new Date(today);
+    const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+    startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
+    
+    // End of week (Sunday night)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    
+    const dueDateObj = new Date(t.dueDate);
+    dueDateObj.setHours(0, 0, 0, 0);
+    
+    return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
+  }).sort((a, b) => a.daysRemaining - b.daysRemaining);
 
   const pushActivity = (msg) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
