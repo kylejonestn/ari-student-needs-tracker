@@ -4,7 +4,7 @@
 
 import React, { useState } from "react";
 import { store } from "../utils/studentStore";
-import { Lock, FileSignature, CheckCircle, ExternalLink, Calendar, ShieldCheck } from "lucide-react";
+import { Lock, FileSignature, CheckCircle, ExternalLink, Calendar, ShieldCheck, Printer } from "lucide-react";
 
 export default function ParentPortal({ students, updateStudent }) {
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || "");
@@ -66,34 +66,58 @@ export default function ParentPortal({ students, updateStudent }) {
           <Lock size={16} />
           <span>Parent Access Portal (Simulated Read-Only View of parent-portal.json)</span>
         </div>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <label style={{ fontSize: "11px", color: "#c084fc" }}>Child Profile:</label>
-          <select 
-            className="select-field" 
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <label style={{ fontSize: "11px", color: "#c084fc" }}>Child Profile:</label>
+            <select 
+              className="select-field" 
+              style={{ 
+                backgroundColor: "#111827", 
+                color: "white", 
+                borderColor: "#374151",
+                padding: "2px 8px", 
+                fontSize: "11px",
+                height: "auto"
+              }}
+              value={selectedStudentId} 
+              onChange={(e) => {
+                setSelectedStudentId(e.target.value);
+                setParentName("");
+                setConsentChecked(false);
+              }}
+            >
+              {students.map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          <button 
+            type="button"
+            className="btn btn-secondary hide-print" 
+            onClick={() => window.print()}
             style={{ 
-              backgroundColor: "#111827", 
-              color: "white", 
-              borderColor: "#374151",
-              padding: "2px 8px", 
-              fontSize: "11px",
-              height: "auto"
-            }}
-            value={selectedStudentId} 
-            onChange={(e) => {
-              setSelectedStudentId(e.target.value);
-              setParentName("");
-              setConsentChecked(false);
+              padding: "4px 10px", 
+              fontSize: "11px", 
+              backgroundColor: "rgba(192, 132, 252, 0.2)", 
+              color: "#c084fc", 
+              border: "1px solid rgba(192, 132, 252, 0.4)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              height: "22px",
+              borderRadius: "4px"
             }}
           >
-            {students.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+            <Printer size={12} />
+            Print Report
+          </button>
         </div>
       </div>
 
       {parentData ? (
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }} className="dashboard-columns">
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }} className="dashboard-columns">
           {/* Main Parent Dashboard */}
           <div className="glass-panel" style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             {/* Header branding */}
@@ -237,7 +261,7 @@ export default function ParentPortal({ students, updateStudent }) {
                   </p>
                 </div>
               ) : (
-                <form onSubmit={handleSignConsent}>
+                <form onSubmit={handleSignConsent} className="hide-print">
                   <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
                     Please review your child's progress goals above and submit digital signature to confirm receipt.
                   </p>
@@ -280,6 +304,34 @@ export default function ParentPortal({ students, updateStudent }) {
             </div>
           </div>
         </div>
+
+        {/* Physical Signature Block for Paper/PDF Reports */}
+        {!parentData.parentSignature && (
+          <div className="print-only" style={{ marginTop: "40px", paddingTop: "24px", borderTop: "2px solid var(--border-color)" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "16px", color: "var(--text-heading)" }}>Signatures & Receipt Confirmation</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px" }}>
+              <div>
+                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Parent/Guardian Signature</span>
+              </div>
+              <div>
+                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "24px" }}>
+              <div>
+                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Ariel, BMS Gifted Facilitator Signature</span>
+              </div>
+              <div>
+                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
+              </div>
+            </div>
+          </div>
+        )}
+        </>
       ) : (
         <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }} className="glass-panel">
           <p>Please select a valid child profile above to load simulated portal content.</p>

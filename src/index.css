@@ -950,6 +950,21 @@ button, input, select, textarea {
     font-weight: bold;
     color: black !important;
   }
+
+  /* Print-only elements configuration */
+  .print-only {
+    display: block !important;
+  }
+  
+  .dashboard-columns {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+}
+
+/* Print utility outside media print */
+.print-only {
+  display: none;
 }
 
 /* Horizontal Pizza Tracker Styles */
