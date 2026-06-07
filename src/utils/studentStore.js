@@ -6,7 +6,7 @@ import { INITIAL_STUDENTS, INITIAL_SCREENINGS } from "./mockData";
 import { driveService } from "./driveService";
 
 // Default Google OAuth Client ID for project 382674408500
-export const DEFAULT_CLIENT_ID = "382674408500-l58g2d9h0m4tgbg7a5j3cr7h8o94pbl2.apps.googleusercontent.com";
+export const DEFAULT_CLIENT_ID = "382674408500-il976m1gmjnpafrd7ilqnhtln0copmnp.apps.googleusercontent.com";
 
 // Rutherford County Schools (RCS) 2026-2027 breaks & holidays (students not in session)
 const RCS_HOLIDAYS_AND_BREAKS = [
