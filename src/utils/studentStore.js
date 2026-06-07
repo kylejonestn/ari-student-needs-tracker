@@ -223,14 +223,14 @@ export const calculateTimelines = (student, isScreening = false) => {
       });
     }
 
-    // Status 6: Psych Results Pending (Katie Hugs)
+    // Status 6: Psych Results Pending (School Psychologist)
     if (student.status === "Psych Results Pending" && student.permissionToTestReceivedDate) {
       const psych60Day = addDays(student.permissionToTestReceivedDate, 60);
       const daysLeftPsych = getDaysRemaining(psych60Day);
       timelines.push({
         type: "Psychologist 60-Day Evaluation",
         label: "psychologist Testing Window",
-        desc: "Katie Hugs' 60-day calendar to administer IQ test and compile psychological results.",
+        desc: "School Psychologist's 60-day calendar to administer IQ test and compile psychological results.",
         dueDate: psych60Day,
         daysRemaining: daysLeftPsych,
         status: daysLeftPsych <= 0 ? "overdue" : daysLeftPsych <= 10 ? "warning" : "on-track",
@@ -243,7 +243,7 @@ export const calculateTimelines = (student, isScreening = false) => {
       if (checkinDays >= -10 && !student.psychResultsReceived) {
         timelines.push({
           type: "Psychologist Check-in",
-          label: "Check-in with Katie Hugs",
+          label: "Check-in with School Psychologist",
           desc: "Check if testing is scheduled. Psychologist typically tests within 15-20 days.",
           dueDate: checkinDate,
           daysRemaining: checkinDays,
@@ -538,7 +538,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           timelines.push({
             type: "Re-eval Psych Handoff",
             label: "Submit surveys to psych",
-            desc: "Compile parent, teacher, self surveys + observation notes and submit to Katie Hugs.",
+            desc: "Compile parent, teacher, self surveys + observation notes and submit to the School Psychologist.",
             dueDate: handoffDue,
             daysRemaining: handoffDays,
             status: handoffDays <= 0 ? "overdue" : handoffDays <= 2 ? "warning" : "on-track",

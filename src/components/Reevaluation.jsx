@@ -338,7 +338,7 @@ export default function Reevaluation({ students, updateStudent }) {
                 <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>psychologist Compilation & Handoff</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <p style={{ fontSize: "12px", color: "var(--text-main)" }}>
-                    All observations and surveys must be submitted to the school psychologist (Katie Hugs) at least <strong>10 days before the meeting</strong>.
+                    All observations and surveys must be submitted to the School Psychologist at least <strong>10 days before the meeting</strong>.
                     Handoff deadline: <strong>{addDays(activeStudent.reevalMeetingDate, -10)}</strong>.
                   </p>
                   <div className="form-group">

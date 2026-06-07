@@ -181,7 +181,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       `Dear Parent,\n\n` +
       `As the Gifted Facilitator at Blackman Middle School, I am writing to share the results of ${activeScreening.name}'s initial gifted screening and explain the next steps in our evaluation process.\n\n` +
       `${activeScreening.name} has passed our initial academic and characteristics screening by earning ${screeningScore} points on our assessment grid.\n\n` +
-      `The next step is to proceed to a full psychological evaluation with our school psychologist, Katie Hugs, who will administer an IQ test. To qualify for gifted services in Tennessee, a student must meet the following criteria:\n` +
+      `The next step is to proceed to a full psychological evaluation with our School Psychologist, who will administer an IQ test. To qualify for gifted services in Tennessee, a student must meet the following criteria:\n` +
       `1. Score a minimum of 50 points total on the assessment scoring grid.\n` +
       `2. Obtain an IQ score of 123 or higher.\n` +
       `3. Obtain positive points in all three categories (Cognitive, Achievement, and Creativity).\n\n` +
@@ -715,7 +715,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
           </div>
 
           {/* ==========================================
-              PHASE 6: PSYCH TESTING (KATIE HUGS)
+              PHASE 6: PSYCH TESTING (SCHOOL PSYCHOLOGIST)
               ========================================== */}
           <div className={`glass-panel workflow-step-card ${currentPhaseIndex === 5 ? "active" : currentPhaseIndex > 5 ? "completed" : "locked"}`}>
             <div className="workflow-step-header">
@@ -770,7 +770,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
                     checked={activeScreening.psychResultsReceived || false}
                     onChange={(e) => updateScreening(activeScreening.id, { psychResultsReceived: e.target.checked })}
                   />
-                  <strong>Psychological Results Received from Katie Hugs</strong>
+                  <strong>Psychological Results Received from School Psychologist</strong>
                 </label>
 
                 {activeScreening.psychResultsReceived && (
