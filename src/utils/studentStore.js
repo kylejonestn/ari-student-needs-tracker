@@ -95,6 +95,29 @@ export const addDays = (dateStr, days) => {
   return date.toISOString().split("T")[0];
 };
 
+// Default email mappings for core BMS teachers
+export const DEFAULT_TEACHER_EMAILS = {
+  "Ms. Davis": "davis@rcschools.net",
+  "Mrs. Harrison": "harrison@rcschools.net",
+  "Mr. Thompson": "thompson@rcschools.net",
+  "Mr. Adams": "adams@rcschools.net"
+};
+
+// Intelligently guess a teacher's email address using Rutherford County Schools conventions
+export const guessTeacherEmail = (name) => {
+  if (!name) return "";
+  if (name.includes("@")) return name.trim().toLowerCase();
+  
+  const trimmed = name.trim();
+  if (DEFAULT_TEACHER_EMAILS[trimmed]) return DEFAULT_TEACHER_EMAILS[trimmed];
+
+  // Strip prefix titles like Mr., Mrs., Ms., Dr., Miss, Coach
+  let clean = trimmed.replace(/^(mr|mrs|ms|dr|miss|coach)\.?\s+/i, "").trim();
+  const parts = clean.split(/\s+/);
+  const lastName = parts[parts.length - 1];
+  return lastName ? `${lastName.toLowerCase()}@rcschools.net` : "";
+};
+
 /**
  * Calculates Tennessee regulatory and facilitator buffers timelines
  */
@@ -942,6 +965,7 @@ class StudentStore {
         iepSharePointUploadCompleted: false,
         iepPhysicalFileCompleted: false,
         augustSetupComplete: false,
+        classroomTeacherEmail: student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher),
         ...student
       }
     ];
@@ -971,6 +995,7 @@ class StudentStore {
       iepSharePointUploadCompleted: false,
       iepPhysicalFileCompleted: false,
       augustSetupComplete: false,
+      classroomTeacherEmail: student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher),
       ...student
     }));
 
@@ -1074,6 +1099,7 @@ class StudentStore {
         discontinuationPWNMailDate: false,
         discontinuationCumeFileDate: false,
         nudgeSent: false,
+        classroomTeacherEmail: candidate.classroomTeacherEmail || guessTeacherEmail(candidate.classroomTeacher),
         matrix: {
           cognition: { instrument: "", score: "", points: 0 },
           performance: { instrument: "", score: "", points: 0 },
@@ -1120,6 +1146,7 @@ class StudentStore {
       grade: screening.grade,
       school: screening.school,
       classroomTeacher: screening.classroomTeacher,
+      classroomTeacherEmail: screening.classroomTeacherEmail || guessTeacherEmail(screening.classroomTeacher),
       status: "Active",
       iepReviewDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
       reevalDueDate: addDays(new Date().toISOString().split("T")[0], 3 * 365), // 3 years later

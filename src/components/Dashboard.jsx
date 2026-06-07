@@ -6,7 +6,8 @@ import React, { useState } from "react";
 import { 
   store,
   calculateTimelines, 
-  getDaysRemaining 
+  getDaysRemaining,
+  guessTeacherEmail
 } from "../utils/studentStore";
 import { 
   Users, 
@@ -85,8 +86,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   };
 
   const handleNudge = (screening) => {
-    const teacherEmails = store.getState().teacherEmails || {};
-    const email = teacherEmails[screening.classroomTeacher] || "teacher@rcschools.net";
+    const email = screening.classroomTeacherEmail || guessTeacherEmail(screening.classroomTeacher) || "teacher@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${screening.name}`);
     const body = encodeURIComponent(

@@ -4,6 +4,7 @@
 
 import React, { useState } from "react";
 import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X } from "lucide-react";
+import { guessTeacherEmail } from "../utils/studentStore";
 
 export default function Students({ 
   students, 
@@ -30,6 +31,8 @@ export default function Students({
   const [newName, setNewName] = useState("");
   const [newGrade, setNewGrade] = useState("6th");
   const [newTeacher, setNewTeacher] = useState("");
+  const [newTeacherEmail, setNewTeacherEmail] = useState("");
+  const [isTeacherEmailCustom, setIsTeacherEmailCustom] = useState(false);
   const [newIepDate, setNewIepDate] = useState("");
   const [newReevalDate, setNewReevalDate] = useState("");
   const [newAccommodations, setNewAccommodations] = useState("");
@@ -262,6 +265,7 @@ export default function Students({
       grade: newGrade,
       school: "Blackman Middle School",
       classroomTeacher: newTeacher,
+      classroomTeacherEmail: newTeacherEmail.trim() || guessTeacherEmail(newTeacher),
       iepReviewDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
@@ -270,6 +274,8 @@ export default function Students({
     // Reset Form
     setNewName("");
     setNewTeacher("");
+    setNewTeacherEmail("");
+    setIsTeacherEmailCustom(false);
     setNewIepDate("");
     setNewReevalDate("");
     setNewAccommodations("");
@@ -367,19 +373,38 @@ export default function Students({
                   className="input-field"
                   placeholder="e.g. Mrs. Harrison (ELA)"
                   value={newTeacher}
-                  onChange={(e) => setNewTeacher(e.target.value)}
+                  onChange={(e) => {
+                    setNewTeacher(e.target.value);
+                    if (!isTeacherEmailCustom) {
+                      setNewTeacherEmail(guessTeacherEmail(e.target.value));
+                    }
+                  }}
                 />
               </div>
               <div className="form-group">
-                <label>Initial Accommodations (comma-separated)</label>
+                <label>Classroom Teacher Email (Auto-Guessed)</label>
                 <input
-                  type="text"
+                  type="email"
                   className="input-field"
-                  placeholder="e.g. Curriculum Compacting, Advanced Pacing"
-                  value={newAccommodations}
-                  onChange={(e) => setNewAccommodations(e.target.value)}
+                  placeholder="e.g. harrison@rcschools.net"
+                  value={newTeacherEmail}
+                  onChange={(e) => {
+                    setNewTeacherEmail(e.target.value);
+                    setIsTeacherEmailCustom(true);
+                  }}
                 />
               </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label>Initial Accommodations (comma-separated)</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="e.g. Curriculum Compacting, Advanced Pacing"
+                value={newAccommodations}
+                onChange={(e) => setNewAccommodations(e.target.value)}
+              />
             </div>
 
             <div className="form-row">
@@ -658,7 +683,7 @@ export default function Students({
               </button>
             </div>
             
-            <div className="form-group" style={{ marginBottom: "20px" }}>
+             <div className="form-group" style={{ marginBottom: "20px" }}>
               <label>Select Classroom Teacher</label>
               <select 
                 className="select-field" 
@@ -667,7 +692,10 @@ export default function Students({
                 style={{ width: "100%", marginTop: "6px" }}
               >
                 <option value="">-- Choose Homeroom Teacher --</option>
-                {Object.keys(teacherEmails).map(teacher => (
+                {Array.from(new Set([
+                  ...students.map(s => s.classroomTeacher),
+                  "Ms. Davis", "Mrs. Harrison", "Mr. Thompson", "Mr. Adams"
+                ].filter(Boolean))).sort().map(teacher => (
                   <option key={teacher} value={teacher}>{teacher}</option>
                 ))}
               </select>
@@ -685,7 +713,10 @@ export default function Students({
                     alert("Please select a teacher.");
                     return;
                   }
-                  bulkUpdateStudents(selectedIds, { classroomTeacher: selectedTeacher });
+                  bulkUpdateStudents(selectedIds, { 
+                    classroomTeacher: selectedTeacher,
+                    classroomTeacherEmail: guessTeacherEmail(selectedTeacher)
+                  });
                   setSelectedIds([]);
                   setShowTeacherModal(false);
                 }}
@@ -812,10 +843,37 @@ export default function Students({
               <div>
                 <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase" }}>General Info</h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
-                  <div><label style={{ color: "var(--text-muted)" }}>Classroom Teacher:</label> <p style={{ fontWeight: "600" }}>{selectedStudent.classroomTeacher}</p></div>
-                  <div><label style={{ color: "var(--text-muted)" }}>School District:</label> <p style={{ fontWeight: "600" }}>Rutherford County Schools</p></div>
-                  <div><label style={{ color: "var(--text-muted)" }}>Annual IEP Due:</label> <p style={{ fontWeight: "600", color: "var(--accent-amber)" }}>{selectedStudent.iepReviewDate}</p></div>
-                  <div><label style={{ color: "var(--text-muted)" }}>Triennial Re-eval Due:</label> <p style={{ fontWeight: "600" }}>{selectedStudent.reevalDueDate}</p></div>
+                  <div>
+                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Classroom Teacher:</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
+                      value={selectedStudent.classroomTeacher || ""}
+                      onChange={(e) => {
+                        const updated = { ...selectedStudent, classroomTeacher: e.target.value };
+                        setSelectedStudent(updated);
+                        updateStudent(selectedStudent.id, { classroomTeacher: e.target.value });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Classroom Teacher Email:</label>
+                    <input
+                      type="email"
+                      className="input-field"
+                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
+                      value={selectedStudent.classroomTeacherEmail || ""}
+                      placeholder={guessTeacherEmail(selectedStudent.classroomTeacher)}
+                      onChange={(e) => {
+                        const updated = { ...selectedStudent, classroomTeacherEmail: e.target.value };
+                        setSelectedStudent(updated);
+                        updateStudent(selectedStudent.id, { classroomTeacherEmail: e.target.value });
+                      }}
+                    />
+                  </div>
+                  <div><label style={{ color: "var(--text-muted)" }}>Annual IEP Due:</label> <p style={{ fontWeight: "600", color: "var(--accent-amber)", marginTop: "6px" }}>{selectedStudent.iepReviewDate}</p></div>
+                  <div><label style={{ color: "var(--text-muted)" }}>Triennial Re-eval Due:</label> <p style={{ fontWeight: "600", marginTop: "6px" }}>{selectedStudent.reevalDueDate}</p></div>
                 </div>
               </div>
 

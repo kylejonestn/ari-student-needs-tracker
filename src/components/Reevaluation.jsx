@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState, useEffect } from "react";
-import { store, addDays, getDaysRemaining } from "../utils/studentStore";
+import { store, addDays, getDaysRemaining, guessTeacherEmail } from "../utils/studentStore";
 import { 
   ClipboardCheck, 
   Calendar, 
@@ -34,21 +34,16 @@ export default function Reevaluation({ students, updateStudent }) {
     return day !== 1 && day !== 4; // Monday = 1, Thursday = 4
   };
 
-  // Helper to look up classroom teacher's email from settings
-  const getTeacherEmail = (teacherName) => {
-    if (!teacherName) return "teacher@rcschools.net";
-    const teacherEmails = store.getState().teacherEmails || {};
-    const match = Object.keys(teacherEmails).find(key => 
-      teacherName.toLowerCase().includes(key.toLowerCase()) || 
-      key.toLowerCase().includes(teacherName.toLowerCase())
-    );
-    return match ? teacherEmails[match] : "teacher@rcschools.net";
+  // Helper to look up or guess classroom teacher's email
+  const getTeacherEmail = (student) => {
+    if (!student) return "teacher@rcschools.net";
+    return student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher) || "teacher@rcschools.net";
   };
 
   // Handle survey request email mailto generator
   const handleEmailTeacherSurvey = () => {
     if (!activeStudent) return;
-    const email = getTeacherEmail(activeStudent.classroomTeacher);
+    const email = getTeacherEmail(activeStudent);
     const subject = encodeURIComponent(`[Aegis Action Required] Gifted Re-evaluation Survey for ${activeStudent.name}`);
     const body = encodeURIComponent(
       `Hi ${activeStudent.classroomTeacher || "Teacher"},\n\n` +

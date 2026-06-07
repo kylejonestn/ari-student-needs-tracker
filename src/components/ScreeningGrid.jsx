@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState, useEffect } from "react";
-import { store, addDays, getDaysRemaining, addSchoolDays } from "../utils/studentStore";
+import { store, addDays, getDaysRemaining, addSchoolDays, guessTeacherEmail } from "../utils/studentStore";
 import { 
   Check, 
   ClipboardList, 
@@ -35,6 +35,8 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const [refName, setRefName] = useState("");
   const [refGrade, setRefGrade] = useState("6th");
   const [refTeacher, setRefTeacher] = useState("");
+  const [refTeacherEmail, setRefTeacherEmail] = useState("");
+  const [isTeacherEmailCustom, setIsTeacherEmailCustom] = useState(false);
 
   const [viewMode, setViewMode] = useState("timeline");
   const [expandedStudentId, setExpandedStudentId] = useState(null);
@@ -79,11 +81,14 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       name: refName,
       grade: refGrade,
       classroomTeacher: refTeacher,
+      classroomTeacherEmail: refTeacherEmail.trim() || guessTeacherEmail(refTeacher),
       school: "Blackman Middle School"
     });
 
     setRefName("");
     setRefTeacher("");
+    setRefTeacherEmail("");
+    setIsTeacherEmailCustom(false);
     setShowAddReferral(false);
     
     // Auto-select newly created referral
@@ -143,8 +148,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
 
   const handleNudgeForStudent = (student) => {
     if (!student) return;
-    const teacherEmails = store.getState().teacherEmails || {};
-    const email = teacherEmails[student.classroomTeacher] || "teacher@rcschools.net";
+    const email = student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher) || "teacher@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${student.name}`);
     const body = encodeURIComponent(
@@ -895,15 +899,35 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                 </select>
               </div>
             </div>
-            <div className="form-group">
-              <label>Classroom Core Referral Teacher</label>
-              <input 
-                type="text" 
-                className="input-field" 
-                placeholder="e.g. Mr. Thompson"
-                value={refTeacher}
-                onChange={(e) => setRefTeacher(e.target.value)}
-              />
+            <div className="form-row">
+              <div className="form-group">
+                <label>Classroom Core Referral Teacher</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="e.g. Mr. Thompson"
+                  value={refTeacher}
+                  onChange={(e) => {
+                    setRefTeacher(e.target.value);
+                    if (!isTeacherEmailCustom) {
+                      setRefTeacherEmail(guessTeacherEmail(e.target.value));
+                    }
+                  }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Teacher Email (Auto-Guessed)</label>
+                <input 
+                  type="email" 
+                  className="input-field" 
+                  placeholder="e.g. thompson@rcschools.net"
+                  value={refTeacherEmail}
+                  onChange={(e) => {
+                    setRefTeacherEmail(e.target.value);
+                    setIsTeacherEmailCustom(true);
+                  }}
+                />
+              </div>
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "12px" }}>
               <button type="button" className="btn btn-secondary" onClick={() => setShowAddReferral(false)}>Cancel</button>
@@ -966,7 +990,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                     </h3>
                     <div className="timeline-student-meta">
                       <span>Grade: <strong>{student.grade}</strong></span>
-                      <span>Teacher: <strong>{student.classroomTeacher}</strong></span>
+                      <span>Teacher: <strong>{student.classroomTeacher}</strong> ({student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher)})</span>
                       <span>School: <strong>{student.school}</strong></span>
                     </div>
                   </div>
