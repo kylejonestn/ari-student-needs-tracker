@@ -25,6 +25,17 @@ import {
   List
 } from "lucide-react";
 
+const phases = [
+  "Quick Survey",
+  "Consent Pending",
+  "Evaluation in Progress",
+  "Informed Consent",
+  "Permission to Test Pending",
+  "Psych Results Pending",
+  "Meeting Scheduled",
+  "Pending Discontinuation"
+];
+
 export default function ScreeningGrid({ screenings, addScreening, updateScreening, placeStudent }) {
   // Read initial selection from store if present
   const globalSelectedId = store.getState().selectedScreeningId;
@@ -106,6 +117,10 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       status: dateStr ? "Evaluation in Progress" : "Consent Pending",
       teacherChecklistSentDate: dateStr ? dateStr : ""
     });
+    setSelectedStepIndexByStudent(prev => ({
+      ...prev,
+      [student.id]: dateStr ? 2 : 1
+    }));
   };
 
   const handleConsentDate = (dateStr) => {
@@ -119,6 +134,10 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       psychologistHandoffDate: dateStr,
       status: dateStr ? "Psych Results Pending" : "Permission to Test Pending"
     });
+    setSelectedStepIndexByStudent(prev => ({
+      ...prev,
+      [student.id]: dateStr ? 5 : 4
+    }));
   };
 
   const handleBatonPass = (dateStr) => {
@@ -174,6 +193,10 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const advanceStatusForStudent = (student, newStatus) => {
     if (!student) return;
     updateScreening(student.id, { status: newStatus });
+    const nextIdx = phases.indexOf(newStatus);
+    if (nextIdx !== -1) {
+      setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: nextIdx }));
+    }
   };
 
   const advanceStatus = (newStatus) => {
@@ -302,6 +325,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
               disabled={!student.surveyPriorTestingCheck}
               onClick={() => {
                 updateScreening(student.id, { quickSurveyCompleted: true, status: "Consent Pending" });
+                setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: 1 }));
               }}
               style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             >
@@ -787,16 +811,6 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const isEligibleForPlacement = totalPoints >= 50 && cognitionPts > 0 && performancePts > 0 && creativityPts > 0 && activeScreening?.psychResultsReceived;
 
   // Phase index calculator
-  const phases = [
-    "Quick Survey",
-    "Consent Pending",
-    "Evaluation in Progress",
-    "Informed Consent",
-    "Permission to Test Pending",
-    "Psych Results Pending",
-    "Meeting Scheduled",
-    "Pending Discontinuation"
-  ];
   
   const currentPhaseIndex = activeScreening ? phases.indexOf(activeScreening.status) : -1;
 
