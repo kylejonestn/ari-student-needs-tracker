@@ -2,8 +2,8 @@
    Aegis Gifted Tracker - SettingsPanel Component
    ========================================== */
 
-import React, { useState } from "react";
-import { store } from "../utils/studentStore";
+import React, { useState, useEffect } from "react";
+import { store, DEFAULT_REPORT_CARD_DATES, DEFAULT_CLIENT_ID } from "../utils/studentStore";
 import { Cloud, CloudOff, Info, Key, HelpCircle, Check, RefreshCw, Mail, Calendar } from "lucide-react";
 
 export default function SettingsPanel({ 
@@ -18,14 +18,49 @@ export default function SettingsPanel({
   tokenExpiry
 }) {
   const [tempClientId, setTempClientId] = useState(clientId);
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [calendarSync, setCalendarSync] = useState(true);
   const [showSavedMsg, setShowSavedMsg] = useState(false);
+  
+  const emailAlerts = store.getState().emailAlertsEnabled;
+  const calendarSync = store.getState().calendarSyncEnabled;
+
+  const storeWorkEmail = store.getState().workEmail;
+  const storeTeacherEmails = store.getState().teacherEmails;
 
   // Email state variables
-  const [tempWorkEmail, setTempWorkEmail] = useState(store.getState().workEmail);
-  const [teacherEmailsState, setTeacherEmailsState] = useState(store.getState().teacherEmails);
+  const [tempWorkEmail, setTempWorkEmail] = useState(storeWorkEmail);
+  const [teacherEmailsState, setTeacherEmailsState] = useState(storeTeacherEmails);
   const [showEmailSavedMsg, setShowEmailSavedMsg] = useState(false);
+
+  // Keep local inputs synced with external state changes (like after a Google Drive sync)
+  useEffect(() => {
+    setTempClientId(clientId);
+  }, [clientId]);
+
+  useEffect(() => {
+    setTempWorkEmail(storeWorkEmail);
+  }, [storeWorkEmail]);
+
+  useEffect(() => {
+    setTeacherEmailsState(storeTeacherEmails);
+  }, [storeTeacherEmails]);
+
+  const storeReportCardDates = store.getState().reportCardDates || DEFAULT_REPORT_CARD_DATES;
+  const [reportCardDatesState, setReportCardDatesState] = useState(storeReportCardDates);
+  const [showDatesSavedMsg, setShowDatesSavedMsg] = useState(false);
+
+  useEffect(() => {
+    setReportCardDatesState(storeReportCardDates);
+  }, [storeReportCardDates]);
+
+  const handleSaveReportCardDates = (e) => {
+    e.preventDefault();
+    store.updateState({
+      reportCardDates: reportCardDatesState
+    });
+    store.triggerCloudSave();
+    setShowDatesSavedMsg(true);
+    setTimeout(() => setShowDatesSavedMsg(false), 2000);
+  };
 
   const handleSaveEmails = (e) => {
     e.preventDefault();
@@ -62,32 +97,34 @@ export default function SettingsPanel({
           <div className="glass-panel">
             <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
               <Key size={18} color="var(--accent-purple)" />
-              Google Cloud API Credentials
+              Google Cloud API Credentials (Optional)
             </h3>
             
             <form onSubmit={handleSaveClientId}>
               <div className="form-group">
-                <label>OAuth 2.0 Client ID (Web Application)</label>
+                <label>OAuth 2.0 Client ID (Custom Override)</label>
                 <input 
                   type="text" 
                   className="input-field" 
                   style={{ fontSize: "12px" }}
-                  placeholder="e.g. 123456789-abc123xyz.apps.googleusercontent.com"
+                  placeholder={`Default System ID Active: ${DEFAULT_CLIENT_ID.substring(0, 20)}...`}
                   value={tempClientId}
                   onChange={(e) => setTempClientId(e.target.value)}
                 />
                 <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  A Client ID is required to authenticate OAuth logins client-side with Google Drive. See the guide on the right on how to set this up for free.
+                  {tempClientId.trim() 
+                    ? "Custom Client ID configured. Aegis will use your custom credentials." 
+                    : "No custom Client ID entered. Aegis is running in Standard SSO Mode using default system credentials."}
                 </p>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 {showSavedMsg && (
                   <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
-                    ✔ Client ID saved in browser cache!
+                    ✔ Configuration saved!
                   </span>
                 )}
                 <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
-                  Save Credentials
+                  Save Custom ID
                 </button>
               </div>
             </form>
@@ -101,6 +138,10 @@ export default function SettingsPanel({
             </h3>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
+                Aegis will automatically create a dedicated folder named <strong>"Aegis"</strong> in your Google Drive and save your secure tracker databases inside it.
+              </p>
+
               {/* Connection state HUD info */}
               <div style={{ 
                 padding: "16px", 
@@ -127,7 +168,7 @@ export default function SettingsPanel({
                       <span style={{ fontWeight: "600" }}>{getMinutesRemaining()} mins</span>
                     </div>
                     <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                      Using Google Scope: <code style={{ fontSize: "10px" }}>drive.file</code> (Read/write access strictly limited to files created by Aegis)
+                      Using Google Scope: <code style={{ fontSize: "10px" }}>drive.file</code> (Authorized to only access the <strong>Aegis</strong> folder and files created by this app)
                     </div>
                   </>
                 )}
@@ -164,11 +205,10 @@ export default function SettingsPanel({
                   <button 
                     className="btn btn-primary" 
                     onClick={connectGoogleDrive}
-                    style={{ width: "100%", padding: "12px" }}
-                    disabled={!clientId}
+                    style={{ width: "100%", padding: "12px", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}
                   >
                     <Cloud size={16} />
-                    Connect Ariel's Google Drive
+                    Sign in with Google (SSO)
                   </button>
                 )}
               </div>
@@ -177,7 +217,7 @@ export default function SettingsPanel({
 
           {/* Notifications Simulator */}
           <div className="glass-panel">
-            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+             <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
               <Mail size={18} color="var(--accent-purple)" />
               Weekly Summary & Alert Sync
             </h3>
@@ -191,7 +231,10 @@ export default function SettingsPanel({
                 <input 
                   type="checkbox" 
                   checked={emailAlerts} 
-                  onChange={(e) => setEmailAlerts(e.target.checked)} 
+                  onChange={(e) => {
+                    updateState({ emailAlertsEnabled: e.target.checked });
+                    store.triggerCloudSave();
+                  }} 
                 />
               </div>
 
@@ -205,7 +248,10 @@ export default function SettingsPanel({
                 <input 
                   type="checkbox" 
                   checked={calendarSync} 
-                  onChange={(e) => setCalendarSync(e.target.checked)} 
+                  onChange={(e) => {
+                    updateState({ calendarSyncEnabled: e.target.checked });
+                    store.triggerCloudSave();
+                  }} 
                 />
               </div>
             </div>
@@ -263,6 +309,52 @@ export default function SettingsPanel({
                 )}
                 <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
                   Save Email Routing
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Report Card Dates Configuration */}
+          <div className="glass-panel">
+            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Calendar size={18} color="var(--accent-purple)" />
+              Grading Quarter & Report Card Dates
+            </h3>
+
+            <form onSubmit={handleSaveReportCardDates}>
+              <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
+                Define the dates when IEP progress reports are due for each quarter. Ariel will be alerted a week prior to these deadlines.
+              </p>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                {reportCardDatesState.map((q, idx) => (
+                  <div key={q.quarter} className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-heading)", display: "block", marginBottom: "4px" }}>
+                      {q.quarter} Report Card Date
+                    </label>
+                    <input 
+                      type="date" 
+                      className="input-field"
+                      style={{ fontSize: "12px", padding: "6px 10px", width: "100%" }}
+                      value={q.date}
+                      onChange={(e) => {
+                        const updated = [...reportCardDatesState];
+                        updated[idx] = { ...updated[idx], date: e.target.value };
+                        setReportCardDatesState(updated);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {showDatesSavedMsg && (
+                  <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
+                    ✔ Dates saved & synced!
+                  </span>
+                )}
+                <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
+                  Save Calendar Dates
                 </button>
               </div>
             </form>

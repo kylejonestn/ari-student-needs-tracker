@@ -8,6 +8,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import Students from "./components/Students";
 import ScreeningGrid from "./components/ScreeningGrid";
+import Reevaluation from "./components/Reevaluation";
 import ProgressReports from "./components/ProgressReports";
 import SelStudio from "./components/SelStudio";
 import ParentPortal from "./components/ParentPortal";
@@ -52,6 +53,8 @@ export default function App() {
         return { title: "Student Directory", subtitle: "Active gifted student database & accommodations" };
       case "screening":
         return { title: "Screening & Placement Matrix", subtitle: "Tennessee K-12 Gifted Scoring Grid (IGAM)" };
+      case "reeval":
+        return { title: "Re-evaluation Center", subtitle: "Triennial reviews & direct observation trackers" };
       case "progress":
         return { title: "Progress Reports Writer", subtitle: "Quarterly IEP goal indicators & narratives" };
       case "sel":
@@ -143,6 +146,7 @@ export default function App() {
         setIsParentMode={(pm) => store.updateState({ isParentMode: pm })}
         theme={theme}
         setTheme={(theme) => store.setTheme(theme)}
+        students={students}
       />
 
       {/* 2. Right Hand Wrapper Area */}
@@ -182,6 +186,7 @@ export default function App() {
                 <Students
                   students={students}
                   addStudent={(student) => store.addStudent(student)}
+                  addStudents={(studentsArr) => store.addStudents(studentsArr)}
                   updateStudent={(id, fields) => store.updateStudent(id, fields)}
                 />
               )}
@@ -191,6 +196,12 @@ export default function App() {
                   addScreening={(cand) => store.addScreening(cand)}
                   updateScreening={(id, fields) => store.updateScreening(id, fields)}
                   placeStudent={(id, accoms) => store.placeStudent(id, accoms)}
+                />
+              )}
+              {activeTab === "reeval" && (
+                <Reevaluation
+                  students={students}
+                  updateStudent={(id, fields) => store.updateStudent(id, fields)}
                 />
               )}
               {activeTab === "progress" && (

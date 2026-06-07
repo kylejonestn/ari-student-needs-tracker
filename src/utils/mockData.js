@@ -10,13 +10,30 @@ export const INITIAL_STUDENTS = [
     school: "Blackman Middle School",
     classroomTeacher: "Mrs. Harrison (ELA)",
     status: "Active",
-    iepReviewDate: "2026-07-15", // Annual IEP Review Date
-    reevalDueDate: "2027-11-20",  // Triennial Re-evaluation Date
+    iepReviewDate: "2027-06-04", // Annual IEP Review Date (Just completed)
+    reevalDueDate: "2029-11-20",  // Triennial Re-evaluation Date
     accommodations: [
       "Curriculum Compacting in ELA",
       "Advanced Math Tier 3",
       "Socratic Seminar Leadership Roles"
     ],
+    // IEP writing details for Friday signature checklist
+    iepMeetingDate: "2026-06-04",
+    iepInvitationSentDate: "2026-05-15",
+    iepInvitationResponseReceived: true,
+    iepTeacherChecklistSent: true,
+    iepDataMiningCompleted: true,
+    iepTransitionSurveyCompleted: true,
+    iepDraftWrittenDate: "2026-06-01",
+    iepDraftSentDate: "2026-06-02",
+    iepFinalizedDate: "2026-06-05", // Finalized yesterday!
+    iepAtAGlancePrinted: true,
+    iepAtAGlanceSignaturesCompleted: false, // Needs signatures this Friday!
+    iepPulseUploadCompleted: false,
+    iepSharePointUploadCompleted: false,
+    iepPhysicalFileCompleted: false,
+    augustSetupComplete: true,
+    
     selNeeds: {
       type: "Perfectionism & Anxiety",
       details: "Sarah struggles with fear of failure, leading to task paralysis on open-ended creative assignments.",
@@ -44,13 +61,26 @@ export const INITIAL_STUDENTS = [
     school: "Blackman Middle School",
     classroomTeacher: "Mr. Thompson (Science)",
     status: "Active",
-    iepReviewDate: "2026-06-08", // Annual IEP Due VERY SOON (current date: May 28, 2026)
+    iepReviewDate: "2026-06-25", // Due very soon
     reevalDueDate: "2026-06-25",  // Triennial Re-evaluation Due VERY SOON
     accommodations: [
       "Twice-Exceptional (2e) ADHD Support",
       "Visual Organizers for Multi-step Science Lab Reports",
       "Alternative Assessment Portfolios"
     ],
+    // Re-eval setup
+    reevalMeetingDate: "2026-06-25",
+    reevalInvitationSentDate: "2026-06-05",
+    reevalParentSurveyDispatched: true,
+    reevalParentSurveyReturned: false,
+    reevalTeacherSurveyDispatched: true,
+    reevalTeacherSurveyReturned: true,
+    reevalSelfSurveyCompleted: true,
+    reevalDirectObservationCompleted: false, // Classroom observation pending
+    reevalDirectObservationDate: "",
+    reevalPsychologistHandoffDate: "",
+    reevalMeetingCompleted: false,
+
     selNeeds: {
       type: "Asynchronous Development",
       details: "Jackson's conceptual cognitive capacity is at a high-school senior level, but his emotional self-regulation and executive functioning are typical of a 6th grader.",
@@ -101,15 +131,34 @@ export const INITIAL_SCREENINGS = [
     grade: "6th",
     school: "Blackman Middle School",
     classroomTeacher: "Ms. Davis",
-    referralDate: "2026-04-10",
-    consentReceivedDate: "2026-04-16", // 42 days ago (60-day deadline is June 15, 2026!)
+    referralDate: "2026-05-20",
+    consentReceivedDate: "2026-05-26", // 11 calendar days ago (49 days remaining)
     status: "Evaluation in Progress",
-    teacherChecklistSigned: false, // Ms. Davis hasn't returned her checklist yet!
+    teacherChecklistSigned: false, // ELA/Math checklist pending (nudge needed!)
+    teacherChecklistSentDate: "2026-05-26",
+    academicCheckCompleted: false,
+    academicInstrument: "T-VAAS",
+    academicScore: "",
+    creativityCheckCompleted: false,
+    creativityInstrument: "TN TOL",
+    creativityScore: "",
+    informedConsentCompleted: false,
+    permissionToTestSentDate: "",
+    permissionToTestReceivedDate: "",
+    psychologistHandoffDate: "",
+    psychResultsReceived: false,
+    psychIqScore: "",
+    psychPoints: 0,
+    meetingDate: "",
+    meetingInvitationSentDate: "",
+    meetingNoticeWaived: false,
+    discontinuationPWNMailDate: false,
+    discontinuationCumeFileDate: false,
     nudgeSent: false,
     matrix: {
-      cognition: { instrument: "WISC-V Full Scale IQ", score: 126, points: 20 },
+      cognition: { instrument: "", score: "", points: 0 },
       performance: { instrument: "TCAP ELA Percentile", score: 98, points: 20 },
-      creativity: { instrument: "Renzulli Rating Scale", score: 0, points: 0 } // Pending Ms. Davis's checklist!
+      creativity: { instrument: "", score: "", points: 0 }
     }
   },
   {
@@ -118,10 +167,32 @@ export const INITIAL_SCREENINGS = [
     grade: "7th",
     school: "Blackman Middle School",
     classroomTeacher: "Mr. Adams",
-    referralDate: "2026-05-20",
+    referralDate: "2026-06-01",
     consentReceivedDate: "", // Parental Consent PENDING
     status: "Consent Pending",
-    teacherChecklistSigned: false,
+    surveyPriorTestingCheck: false,
+    surveyEslCheck: false,
+    surveyDcsCheck: false,
+    quickSurveyCompleted: false,
+    parentPaperworkSentDate: "2026-06-02",
+    academicCheckCompleted: false,
+    academicInstrument: "T-VAAS",
+    academicScore: "",
+    creativityCheckCompleted: false,
+    creativityInstrument: "TN TOL",
+    creativityScore: "",
+    informedConsentCompleted: false,
+    permissionToTestSentDate: "",
+    permissionToTestReceivedDate: "",
+    psychologistHandoffDate: "",
+    psychResultsReceived: false,
+    psychIqScore: "",
+    psychPoints: 0,
+    meetingDate: "",
+    meetingInvitationSentDate: "",
+    meetingNoticeWaived: false,
+    discontinuationPWNMailDate: false,
+    discontinuationCumeFileDate: false,
     nudgeSent: false,
     matrix: {
       cognition: { instrument: "", score: "", points: 0 },
@@ -135,15 +206,105 @@ export const INITIAL_SCREENINGS = [
     grade: "6th",
     school: "Blackman Middle School",
     classroomTeacher: "Mrs. Harrison",
-    referralDate: "2026-05-22",
-    consentReceivedDate: "2026-05-26", // 2 days ago (58 days remaining, On Track!)
-    status: "Evaluation in Progress",
-    teacherChecklistSigned: true, // Signed and returned!
+    referralDate: "2026-05-18",
+    consentReceivedDate: "2026-05-20", 
+    status: "Psych Results Pending", // Passed screening, waiting psych results
+    academicCheckCompleted: true,
+    academicInstrument: "T-VAAS",
+    academicScore: 98,
+    creativityCheckCompleted: true,
+    creativityInstrument: "TN TOL",
+    creativityScore: 12,
+    informedConsentCompleted: true,
+    permissionToTestSentDate: "2026-05-26",
+    permissionToTestReceivedDate: "2026-05-28", // starts new 60-day psych calendar!
+    psychologistHandoffDate: "2026-05-28",
+    psychResultsReceived: false,
+    psychIqScore: "",
+    psychPoints: 0,
+    meetingDate: "",
+    meetingInvitationSentDate: "",
+    meetingNoticeWaived: false,
+    discontinuationPWNMailDate: false,
+    discontinuationCumeFileDate: false,
     nudgeSent: false,
     matrix: {
-      cognition: { instrument: "RIAS-2 Verbal Intelligence", score: 132, points: 25 },
+      cognition: { instrument: "", score: "", points: 0 },
       performance: { instrument: "TCAP Math Percentile", score: 96, points: 15 },
-      creativity: { instrument: "Torrance Test of Creativity", score: 88, points: 15 } // Eligible (55 total points!)
+      creativity: { instrument: "Renzulli Rating Scale", score: 12, points: 15 } // Passed screening (30 points total)
+    }
+  },
+  {
+    id: "screen-4",
+    name: "Sarah Jenkins",
+    grade: "6th",
+    school: "Blackman Middle School",
+    classroomTeacher: "Mr. Thompson",
+    referralDate: "2026-06-05",
+    consentReceivedDate: "",
+    status: "Quick Survey", // Just referred, checking cume file
+    surveyPriorTestingCheck: false,
+    surveyEslCheck: false,
+    surveyDcsCheck: false,
+    quickSurveyCompleted: false,
+    parentPaperworkSentDate: "",
+    academicCheckCompleted: false,
+    academicInstrument: "T-VAAS",
+    academicScore: "",
+    creativityCheckCompleted: false,
+    creativityInstrument: "TN TOL",
+    creativityScore: "",
+    informedConsentCompleted: false,
+    permissionToTestSentDate: "",
+    permissionToTestReceivedDate: "",
+    psychologistHandoffDate: "",
+    psychResultsReceived: false,
+    psychIqScore: "",
+    psychPoints: 0,
+    meetingDate: "",
+    meetingInvitationSentDate: "",
+    meetingNoticeWaived: false,
+    discontinuationPWNMailDate: false,
+    discontinuationCumeFileDate: false,
+    nudgeSent: false,
+    matrix: {
+      cognition: { instrument: "", score: "", points: 0 },
+      performance: { instrument: "", score: "", points: 0 },
+      creativity: { instrument: "", score: "", points: 0 }
+    }
+  },
+  {
+    id: "screen-5",
+    name: "Jack Peterson",
+    grade: "7th",
+    school: "Blackman Middle School",
+    classroomTeacher: "Mrs. Harrison",
+    referralDate: "2026-05-10",
+    consentReceivedDate: "2026-05-12",
+    status: "Pending Discontinuation", // Failed to qualify
+    academicCheckCompleted: true,
+    academicInstrument: "T-VAAS",
+    academicScore: 8,
+    creativityCheckCompleted: true,
+    creativityInstrument: "TN TOL",
+    creativityScore: 5,
+    informedConsentCompleted: false,
+    permissionToTestSentDate: "",
+    permissionToTestReceivedDate: "",
+    psychologistHandoffDate: "",
+    psychResultsReceived: false,
+    psychIqScore: "",
+    psychPoints: 0,
+    meetingDate: "",
+    meetingInvitationSentDate: "",
+    meetingNoticeWaived: false,
+    discontinuationPWNMailDate: false,
+    discontinuationCumeFileDate: false,
+    nudgeSent: false,
+    matrix: {
+      cognition: { instrument: "", score: "", points: 0 },
+      performance: { instrument: "TCAP Math Percentile", score: 82, points: 5 },
+      creativity: { instrument: "SIGS behavior rating", score: 8, points: 5 } // 10 points total (< 20 required!)
     }
   }
 ];

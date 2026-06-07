@@ -3,9 +3,9 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText } from "lucide-react";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle } from "lucide-react";
 
-export default function Students({ students, addStudent, updateStudent }) {
+export default function Students({ students, addStudent, addStudents, updateStudent }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -17,6 +17,209 @@ export default function Students({ students, addStudent, updateStudent }) {
   const [newIepDate, setNewIepDate] = useState("");
   const [newReevalDate, setNewReevalDate] = useState("");
   const [newAccommodations, setNewAccommodations] = useState("");
+
+  // CSV Import Wizard State
+  const [showImportWizard, setShowImportWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1); // 1 = Upload, 2 = Mapping, 3 = Preview
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvRows, setCsvRows] = useState([]);
+  const [columnMapping, setColumnMapping] = useState({
+    name: "",
+    grade: "",
+    classroomTeacher: "",
+    iepReviewDate: "",
+    reevalDueDate: "",
+    accommodations: ""
+  });
+  const [importPreviewData, setImportPreviewData] = useState([]);
+
+  // Client-side CSV Parser
+  const parseCSV = (text) => {
+    const lines = [];
+    let row = [""];
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const nextChar = text[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          row[row.length - 1] += '"'; // Double quotes escape
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        row.push('');
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (char === '\r' && nextChar === '\n') i++; // Handle CRLF
+        lines.push(row);
+        row = [''];
+      } else {
+        row[row.length - 1] += char;
+      }
+    }
+    if (row.length > 1 || row[0] !== '') {
+      lines.push(row);
+    }
+    
+    // Filter empty lines and trim cells
+    const cleanLines = lines
+      .map(r => r.map(c => c.trim()))
+      .filter(r => r.length > 0 && r.some(c => c !== ""));
+      
+    return cleanLines;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target.result;
+      const parsed = parseCSV(text);
+      if (parsed.length < 2) {
+        alert("The CSV file must contain a header row and at least one data row.");
+        return;
+      }
+
+      const headers = parsed[0];
+      const rows = parsed.slice(1);
+
+      setCsvHeaders(headers);
+      setCsvRows(rows);
+
+      // Perform soft matching
+      const mapping = {
+        name: "",
+        grade: "",
+        classroomTeacher: "",
+        iepReviewDate: "",
+        reevalDueDate: "",
+        accommodations: ""
+      };
+
+      const softMatches = {
+        name: ["name", "student", "full name", "student name", "fullname"],
+        grade: ["grade", "grade level", "class grade", "gradelevel"],
+        classroomTeacher: ["teacher", "homeroom", "classroom teacher", "homeroom teacher", "core teacher", "subject teacher"],
+        iepReviewDate: ["iep", "iep date", "iep review", "annual iep", "review date"],
+        reevalDueDate: ["reeval", "reeval date", "re-eval", "triennial", "re-evaluation"],
+        accommodations: ["accommodations", "supports", "services", "accoms"]
+      };
+
+      headers.forEach(h => {
+        const lowerH = h.toLowerCase().trim();
+        Object.keys(softMatches).forEach(field => {
+          if (softMatches[field].some(match => lowerH.includes(match) || match.includes(lowerH))) {
+            if (!mapping[field]) { // Map first match
+              mapping[field] = h;
+            }
+          }
+        });
+      });
+
+      setColumnMapping(mapping);
+      setWizardStep(2);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleBuildPreview = () => {
+    // Verify required mappings are present
+    const required = ["name", "grade", "classroomTeacher", "iepReviewDate", "reevalDueDate"];
+    const missing = required.filter(f => !columnMapping[f]);
+    if (missing.length > 0) {
+      alert(`Please map all required columns before proceeding: ${missing.map(m => m.toUpperCase()).join(", ")}`);
+      return;
+    }
+
+    // Map rows to target format
+    const preview = csvRows.map((row) => {
+      const getVal = (field) => {
+        const headerName = columnMapping[field];
+        if (!headerName) return "";
+        const colIdx = csvHeaders.indexOf(headerName);
+        return colIdx >= 0 ? row[colIdx] : "";
+      };
+
+      const name = getVal("name");
+      const grade = getVal("grade");
+      const teacher = getVal("classroomTeacher");
+      const iepDate = getVal("iepReviewDate");
+      const reevalDate = getVal("reevalDueDate");
+      const accomsRaw = getVal("accommodations");
+
+      // Validate date formats (simple YYYY-MM-DD check)
+      const isValidDate = (dStr) => {
+        if (!dStr) return false;
+        return /^\d{4}-\d{2}-\d{2}$/.test(dStr.trim());
+      };
+
+      // Accomms parser: split by comma, semicolon, or newlines
+      const accommodations = accomsRaw
+        ? accomsRaw.split(/[;,\n]+/).map(a => a.trim()).filter(Boolean)
+        : [];
+
+      return {
+        name,
+        grade,
+        school: "Blackman Middle School",
+        classroomTeacher: teacher,
+        iepReviewDate: iepDate,
+        reevalDueDate: reevalDate,
+        accommodations,
+        isValid: name && grade && teacher && isValidDate(iepDate) && isValidDate(reevalDate),
+        validationErrors: {
+          name: !name,
+          grade: !grade,
+          classroomTeacher: !teacher,
+          iepReviewDate: !isValidDate(iepDate),
+          reevalDueDate: !isValidDate(reevalDate)
+        }
+      };
+    });
+
+    setImportPreviewData(preview);
+    setWizardStep(3);
+  };
+
+  const handleFinalizeImport = () => {
+    const validStudents = importPreviewData.filter(s => s.isValid);
+    if (validStudents.length === 0) {
+      alert("No valid student records found to import. Please check date formats (must be YYYY-MM-DD) and required columns.");
+      return;
+    }
+
+    addStudents(validStudents.map(({ name, grade, school, classroomTeacher, iepReviewDate, reevalDueDate, accommodations }) => ({
+      name,
+      grade,
+      school,
+      classroomTeacher,
+      iepReviewDate,
+      reevalDueDate,
+      accommodations
+    })));
+
+    alert(`Successfully imported ${validStudents.length} students!`);
+    
+    // Reset wizard
+    setWizardStep(1);
+    setCsvHeaders([]);
+    setCsvRows([]);
+    setColumnMapping({
+      name: "",
+      grade: "",
+      classroomTeacher: "",
+      iepReviewDate: "",
+      reevalDueDate: "",
+      accommodations: ""
+    });
+    setImportPreviewData([]);
+    setShowImportWizard(false);
+  };
 
   // Accommodations editor state
   const [newAccomText, setNewAccomText] = useState("");
@@ -98,11 +301,17 @@ export default function Students({ students, addStudent, updateStudent }) {
           />
         </div>
 
-        {/* Add Student Action Button */}
-        <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
-          <Plus size={16} />
-          {showAddForm ? "Show Student List" : "Add Transfer Student"}
-        </button>
+        {/* Bulk Import and Add Student Actions */}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button className="btn btn-secondary" onClick={() => setShowImportWizard(true)}>
+            <FileSpreadsheet size={16} />
+            Bulk Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
+            <Plus size={16} />
+            {showAddForm ? "Show Student List" : "Add Transfer Student"}
+          </button>
+        </div>
       </div>
 
       {/* Add Student Form */}
@@ -286,6 +495,157 @@ export default function Students({ students, addStudent, updateStudent }) {
                 </div>
               </div>
 
+              {/* IEP Meeting Prep & Data Mining Workspace */}
+              <div style={{ padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
+                <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase", display: "flex", gap: "6px", alignItems: "center" }}>
+                  <ClipboardList size={16} />
+                  IEP Meeting Prep & Data Mining
+                </h4>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>Current TCAP Score</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. 98%ile ELA"
+                        value={selectedStudent.iepDataMinedCurrentTcap || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMinedCurrentTcap: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMinedCurrentTcap: e.target.value });
+                        }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>Previous TCAP Score</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. 95%ile Math"
+                        value={selectedStudent.iepDataMinedPrevTcap || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMinedPrevTcap: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMinedPrevTcap: e.target.value });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>Mastery Connect Benchmark</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. Math 92% Mastery"
+                        value={selectedStudent.iepDataMinedMasteryConnect || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMinedMasteryConnect: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMinedMasteryConnect: e.target.value });
+                        }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>AIMSweb Reading Fluency</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. 145 WPM (96th)"
+                        value={selectedStudent.iepDataMinedAimsWeb || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMinedAimsWeb: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMinedAimsWeb: e.target.value });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>Savvas Math Data</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. Algebra 88%"
+                        value={selectedStudent.iepDataMinedSavvas || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMinedSavvas: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMinedSavvas: e.target.value });
+                        }}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label style={{ fontSize: "11px" }}>Zoom Virtual Meeting Link</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. rcschools.zoom.us/j/..."
+                        value={selectedStudent.iepZoomLink || ""}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepZoomLink: e.target.value };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepZoomLink: e.target.value });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: "11px" }}>Student Transition Goals ({selectedStudent.grade} Grade template)</label>
+                    <textarea 
+                      rows={2}
+                      className="textarea-field" 
+                      style={{ fontSize: "12px", padding: "6px 10px" }}
+                      placeholder={
+                        selectedStudent.grade === "8th" 
+                          ? "8th Grade: High school transition planning, course selections, and self-advocacy goals..."
+                          : "Transition goals: academic self-monitoring, career awareness interest checklists..."
+                      }
+                      value={selectedStudent.iepTransitionGoals || ""}
+                      onChange={(e) => {
+                        const updated = { ...selectedStudent, iepTransitionGoals: e.target.value };
+                        setSelectedStudent(updated);
+                        updateStudent(selectedStudent.id, { iepTransitionGoals: e.target.value });
+                      }}
+                    />
+                  </div>
+
+                  {/* Button to complete data mining checklist */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px", flexWrap: "wrap", gap: "10px" }}>
+                    <label style={{ display: "inline-flex", gap: "6px", alignItems: "center", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedStudent.iepDataMiningCompleted || false}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepDataMiningCompleted: e.target.checked };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepDataMiningCompleted: e.target.checked });
+                        }}
+                      />
+                      <span>Mark Data Mining Completed</span>
+                    </label>
+                    <label style={{ display: "inline-flex", gap: "6px", alignItems: "center", fontSize: "12px", cursor: "pointer", fontWeight: "600" }}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedStudent.iepTransitionSurveyCompleted || false}
+                        onChange={(e) => {
+                          const updated = { ...selectedStudent, iepTransitionSurveyCompleted: e.target.checked };
+                          setSelectedStudent(updated);
+                          updateStudent(selectedStudent.id, { iepTransitionSurveyCompleted: e.target.checked });
+                        }}
+                      />
+                      <span>Mark Transition Survey Completed</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               {/* Accommodations tracking */}
               <div>
                 <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase" }}>Accommodations List</h4>
@@ -333,6 +693,229 @@ export default function Students({ students, addStudent, updateStudent }) {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import Wizard Modal */}
+      {showImportWizard && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(15, 23, 42, 0.8)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 1000,
+          backdropFilter: "blur(4px)",
+          padding: "20px"
+        }}>
+          <div className="glass-panel" style={{
+            width: "100%",
+            maxWidth: "700px",
+            maxHeight: "85vh",
+            overflowY: "auto",
+            border: "1px solid var(--accent-purple)",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.5)"
+          }}>
+            
+            {/* Modal Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "14px", marginBottom: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <FileSpreadsheet size={22} color="var(--accent-purple)" />
+                <h2 style={{ fontSize: "18px", margin: 0 }}>Caseload CSV Import Wizard</h2>
+              </div>
+              <button 
+                className="btn btn-secondary" 
+                style={{ padding: "4px 8px", fontSize: "11px" }}
+                onClick={() => {
+                  setShowImportWizard(false);
+                  setWizardStep(1);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+
+            {/* Step 1: File Upload */}
+            {wizardStep === 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px", textAlign: "center", padding: "20px 0" }}>
+                <div style={{
+                  border: "2px dashed var(--border-color)",
+                  borderRadius: "8px",
+                  padding: "40px 20px",
+                  backgroundColor: "var(--bg-primary)",
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "12px"
+                }}
+                onClick={() => document.getElementById("csv-file-input").click()}
+                >
+                  <Upload size={32} color="var(--text-muted)" />
+                  <span style={{ fontWeight: "700", fontSize: "14px", color: "var(--text-heading)" }}>Upload caseload spreadsheet</span>
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Drag and drop your .csv file here, or click to browse</span>
+                  <input 
+                    type="file" 
+                    id="csv-file-input" 
+                    accept=".csv" 
+                    style={{ display: "none" }} 
+                    onChange={handleFileUpload} 
+                  />
+                </div>
+
+                <div style={{
+                  padding: "12px",
+                  borderRadius: "8px",
+                  backgroundColor: "var(--bg-primary)",
+                  border: "1px solid var(--border-color)",
+                  textAlign: "left",
+                  fontSize: "12px"
+                }}>
+                  <h4 style={{ fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px", color: "var(--text-heading)" }}>
+                    <Info size={14} color="var(--accent-purple)" />
+                    CSV File Template Guide
+                  </h4>
+                  <p style={{ color: "var(--text-muted)", marginBottom: "8px" }}>
+                    Ensure your spreadsheet contains column headers. Aegis will automatically attempt to match the columns, but you will be able to review and manually map them next.
+                  </p>
+                  <div style={{ fontFamily: "monospace", padding: "8px", backgroundColor: "var(--bg-primary)", borderRadius: "4px", border: "1px solid var(--border-color)", overflowX: "auto" }}>
+                    Name, Grade, Teacher, IEP Date, Re-eval Date, Accommodations
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Mapping Wizard */}
+            {wizardStep === 2 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <p style={{ fontSize: "13px", color: "var(--text-main)", margin: 0 }}>
+                  Aegis has analyzed your CSV headers. Please map them to the corresponding student profile fields.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {[
+                    { key: "name", label: "Student Full Name", req: true },
+                    { key: "grade", label: "Grade Level", req: true },
+                    { key: "classroomTeacher", label: "Classroom Teacher", req: true },
+                    { key: "iepReviewDate", label: "Annual IEP Review Date", req: true },
+                    { key: "reevalDueDate", label: "Triennial Re-evaluation Date", req: true },
+                    { key: "accommodations", label: "Accommodations List", req: false }
+                  ].map((field) => (
+                    <div key={field.key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: "600" }}>
+                        {field.label} {field.req && <span style={{ color: "var(--accent-rose)" }}>*</span>}
+                      </span>
+                      <select 
+                        className="select-field"
+                        style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
+                        value={columnMapping[field.key]}
+                        onChange={(e) => setColumnMapping({ ...columnMapping, [field.key]: e.target.value })}
+                      >
+                        <option value="">-- Ignore / Skip Column --</option>
+                        {csvHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+                  <button className="btn btn-secondary" onClick={() => setWizardStep(1)}>
+                    Back
+                  </button>
+                  <button className="btn btn-primary" onClick={handleBuildPreview}>
+                    Next: Review Mapped Data
+                    <ArrowRight size={14} style={{ marginLeft: "6px" }} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Verification & Preview */}
+            {wizardStep === 3 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                  <div>
+                    <h4 style={{ fontSize: "14px", fontWeight: "700", margin: 0, color: "var(--text-heading)" }}>
+                      Caseload Verification Summary
+                    </h4>
+                    <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "2px 0 0" }}>
+                      Total rows parsed: {csvRows.length} | Valid to import: {importPreviewData.filter(s => s.isValid).length}
+                    </p>
+                  </div>
+                  {importPreviewData.some(s => !s.isValid) && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--accent-rose)", fontWeight: "600", padding: "6px 10px", borderRadius: "6px", backgroundColor: "var(--accent-rose-light)" }}>
+                      <AlertCircle size={14} />
+                      Warning: Some rows contain invalid dates (must be YYYY-MM-DD) or missing data and will be skipped.
+                    </div>
+                  )}
+                </div>
+
+                {/* Table Preview */}
+                <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "8px", maxHeight: "300px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "var(--bg-primary)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
+                        <th style={{ padding: "10px" }}>Status</th>
+                        <th style={{ padding: "10px" }}>Name</th>
+                        <th style={{ padding: "10px" }}>Grade</th>
+                        <th style={{ padding: "10px" }}>Teacher</th>
+                        <th style={{ padding: "10px" }}>IEP Date</th>
+                        <th style={{ padding: "10px" }}>Re-eval Date</th>
+                        <th style={{ padding: "10px" }}>Accommodations</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewData.map((row, idx) => (
+                        <tr key={idx} style={{ 
+                          borderBottom: "1px solid var(--border-color)", 
+                          backgroundColor: row.isValid ? "transparent" : "var(--accent-rose-light)",
+                          opacity: row.isValid ? 1 : 0.8
+                        }}>
+                          <td style={{ padding: "10px", fontWeight: "700", color: row.isValid ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                            {row.isValid ? "Valid" : "Skip"}
+                          </td>
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.name ? "700" : "500", color: row.validationErrors.name ? "var(--accent-rose)" : "inherit" }}>
+                            {row.name || "(Missing)"}
+                          </td>
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.grade ? "700" : "500", color: row.validationErrors.grade ? "var(--accent-rose)" : "inherit" }}>
+                            {row.grade || "(Missing)"}
+                          </td>
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.classroomTeacher ? "700" : "500", color: row.validationErrors.classroomTeacher ? "var(--accent-rose)" : "inherit" }}>
+                            {row.classroomTeacher || "(Missing)"}
+                          </td>
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.iepReviewDate ? "700" : "500", color: row.validationErrors.iepReviewDate ? "var(--accent-rose)" : "inherit" }}>
+                            {row.iepReviewDate || "(Missing)"}
+                          </td>
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.reevalDueDate ? "700" : "500", color: row.validationErrors.reevalDueDate ? "var(--accent-rose)" : "inherit" }}>
+                            {row.reevalDueDate || "(Missing)"}
+                          </td>
+                          <td style={{ padding: "10px", color: "var(--text-muted)" }}>
+                            {row.accommodations.join(", ") || "None"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+                  <button className="btn btn-secondary" onClick={() => setWizardStep(2)}>
+                    Back to Mapping
+                  </button>
+                  <button className="btn btn-primary" onClick={handleFinalizeImport}>
+                    Confirm & Bulk Import ({importPreviewData.filter(s => s.isValid).length} Students)
+                  </button>
+                </div>
+              </div>
+            )}
+            
           </div>
         </div>
       )}

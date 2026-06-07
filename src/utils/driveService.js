@@ -43,11 +43,67 @@ export const driveService = {
   },
 
   /**
-   * Search for a file by name in Google Drive.
+   * Search for a folder by name in Google Drive.
+   */
+  async findFolder(accessToken, folderName) {
+    const q = encodeURIComponent(`name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`;
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Google Drive Folder Search Error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+    return null;
+  },
+
+  /**
+   * Create a new folder in Google Drive.
+   */
+  async createFolder(accessToken, folderName) {
+    const url = "https://www.googleapis.com/drive/v3/files";
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: folderName,
+        mimeType: "application/vnd.google-apps.folder",
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Google Drive Folder Creation Error: ${response.status} - ${errText}`);
+    }
+
+    const data = await response.json();
+    return data.id;
+  },
+
+  /**
+   * Search for a file by name in Google Drive, optionally inside a specific parent folder.
    * Restricts search to active (not trashed) files.
    */
-  async findFile(accessToken, filename) {
-    const q = encodeURIComponent(`name = '${filename}' and trashed = false`);
+  async findFile(accessToken, filename, parentId = null) {
+    let query = `name = '${filename}' and trashed = false`;
+    if (parentId) {
+      query += ` and '${parentId}' in parents`;
+    }
+    const q = encodeURIComponent(query);
     const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`;
     
     const response = await fetch(url, {
@@ -91,23 +147,28 @@ export const driveService = {
   },
 
   /**
-   * Create a new file in Google Drive in two phases:
-   * 1. Create file metadata to obtain a fileId.
+   * Create a new file in Google Drive inside a parent folder in two phases:
+   * 1. Create file metadata with parents to obtain a fileId.
    * 2. Upload the JSON content payload.
    */
-  async createFile(accessToken, filename, content) {
+  async createFile(accessToken, filename, content, parentId = null) {
     // Phase 1: Metadata
     const metadataUrl = "https://www.googleapis.com/drive/v3/files";
+    const metadata = {
+      name: filename,
+      mimeType: "application/json",
+    };
+    if (parentId) {
+      metadata.parents = [parentId];
+    }
+
     const metaResponse = await fetch(metadataUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        name: filename,
-        mimeType: "application/json",
-      }),
+      body: JSON.stringify(metadata),
     });
 
     if (!metaResponse.ok) {

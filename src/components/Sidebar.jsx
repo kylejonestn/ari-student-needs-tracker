@@ -14,19 +14,28 @@ import {
   Unlock,
   Sparkles,
   Sun,
-  Moon
+  Moon,
+  ClipboardList
 } from "lucide-react";
+import { calculateTimelines } from "../utils/studentStore";
 
-export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsParentMode, theme, setTheme }) {
+export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsParentMode, theme, setTheme, students = [] }) {
   
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "students", label: "Student Directory", icon: Users },
     { id: "screening", label: "Screening Center", icon: CheckSquare },
+    { id: "reeval", label: "Re-eval Center", icon: ClipboardList },
     { id: "progress", label: "Progress Reports", icon: FileText },
     { id: "sel", label: "SEL Studio", icon: Heart },
     { id: "settings", label: "Settings & Cloud", icon: Settings },
   ];
+
+  // Calculate count of pending progress reports
+  const pendingReportsCount = students
+    .filter(s => s.status === "Active")
+    .flatMap(s => calculateTimelines(s, false))
+    .filter(t => t.type === "IEP Progress Report").length;
 
   return (
     <aside className="sidebar">
@@ -47,6 +56,7 @@ export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsPa
       <nav className="nav-menu">
         {navItems.map((item) => {
           const Icon = item.icon;
+          const showBadge = item.id === "progress" && pendingReportsCount > 0;
           return (
             <div
               key={item.id}
@@ -61,6 +71,21 @@ export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsPa
             >
               <Icon className="nav-icon" />
               <span>{item.label}</span>
+              {showBadge && (
+                <span style={{
+                  marginLeft: "auto",
+                  backgroundColor: "var(--accent-rose)",
+                  color: "#ffffff",
+                  fontSize: "10px",
+                  fontWeight: "700",
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  display: "inline-block",
+                  lineHeight: "1"
+                }}>
+                  {pendingReportsCount}
+                </span>
+              )}
             </div>
           );
         })}
