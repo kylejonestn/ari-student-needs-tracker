@@ -613,13 +613,17 @@ class StudentStore {
       console.error("Local cache load failed", e);
     }
 
+    const savedAccessToken = localStorage.getItem("aegis_access_token") || null;
+    const savedTokenExpiry = localStorage.getItem("aegis_token_expiry") ? parseInt(localStorage.getItem("aegis_token_expiry"), 10) : null;
+    const isTokenValid = savedAccessToken && savedTokenExpiry && Date.now() < savedTokenExpiry;
+
     this.state = {
       theme: savedTheme,
       clientId: savedClientId,
-      syncStatus: "disconnected", // 'disconnected', 'connecting', 'synced', 'saving', 'error'
+      syncStatus: isTokenValid ? "connecting" : "disconnected", // 'disconnected', 'connecting', 'synced', 'saving', 'error'
       syncError: null,
-      accessToken: null,
-      tokenExpiry: null,
+      accessToken: isTokenValid ? savedAccessToken : null,
+      tokenExpiry: isTokenValid ? savedTokenExpiry : null,
       allDataFileId: localStorage.getItem("aegis_all_data_fid") || null,
       parentPortalFileId: localStorage.getItem("aegis_parent_fid") || null,
       aegisFolderId: localStorage.getItem("aegis_folder_id") || null,
@@ -643,6 +647,13 @@ class StudentStore {
 
     // Apply theme
     document.documentElement.setAttribute("data-theme", savedTheme);
+
+    // Auto-connect if previous session is still valid
+    if (isTokenValid) {
+      setTimeout(() => {
+        this.syncFromGoogleDrive();
+      }, 50);
+    }
   }
 
   getState() {
@@ -675,6 +686,20 @@ class StudentStore {
     if (newState.calendarSyncEnabled !== undefined) localStorage.setItem("aegis_calendar_sync", newState.calendarSyncEnabled ? "true" : "false");
     if (newState.teacherEmails !== undefined) localStorage.setItem("aegis_teacher_emails", JSON.stringify(newState.teacherEmails));
     if (newState.reportCardDates !== undefined) localStorage.setItem("aegis_report_card_dates", JSON.stringify(newState.reportCardDates));
+    if (newState.accessToken !== undefined) {
+      if (newState.accessToken) {
+        localStorage.setItem("aegis_access_token", newState.accessToken);
+      } else {
+        localStorage.removeItem("aegis_access_token");
+      }
+    }
+    if (newState.tokenExpiry !== undefined) {
+      if (newState.tokenExpiry) {
+        localStorage.setItem("aegis_token_expiry", newState.tokenExpiry.toString());
+      } else {
+        localStorage.removeItem("aegis_token_expiry");
+      }
+    }
     
     // Save database cache in localStorage for instant offline access
     localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
@@ -719,6 +744,8 @@ class StudentStore {
     localStorage.removeItem("aegis_all_data_fid");
     localStorage.removeItem("aegis_parent_fid");
     localStorage.removeItem("aegis_folder_id");
+    localStorage.removeItem("aegis_access_token");
+    localStorage.removeItem("aegis_token_expiry");
     this.updateState({
       accessToken: null,
       tokenExpiry: null,
