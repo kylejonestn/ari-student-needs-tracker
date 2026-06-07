@@ -37,7 +37,7 @@ export default function Reevaluation({ students, updateStudent }) {
   // Helper to look up or guess classroom teacher's email
   const getTeacherEmail = (student) => {
     if (!student) return "teacher@rcschools.net";
-    return student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher) || "teacher@rcschools.net";
+    return student.classroomTeacherEmail || "teacher@rcschools.net";
   };
 
   // Handle survey request email mailto generator

@@ -264,8 +264,7 @@ export default function Students({
       name: newName,
       grade: newGrade,
       school: "Blackman Middle School",
-      classroomTeacher: newTeacher,
-      classroomTeacherEmail: newTeacherEmail.trim() || guessTeacherEmail(newTeacher),
+      classroomTeacherEmail: newTeacherEmail.trim(),
       iepReviewDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
@@ -375,22 +374,18 @@ export default function Students({
                   value={newTeacher}
                   onChange={(e) => {
                     setNewTeacher(e.target.value);
-                    if (!isTeacherEmailCustom) {
-                      setNewTeacherEmail(guessTeacherEmail(e.target.value));
-                    }
                   }}
                 />
               </div>
               <div className="form-group">
-                <label>Classroom Teacher Email (Auto-Guessed)</label>
+                <label>Classroom Teacher Email</label>
                 <input
                   type="email"
                   className="input-field"
-                  placeholder="e.g. harrison@rcschools.net"
+                  placeholder="lastname@rcschools.net"
                   value={newTeacherEmail}
                   onChange={(e) => {
                     setNewTeacherEmail(e.target.value);
-                    setIsTeacherEmailCustom(true);
                   }}
                 />
               </div>
@@ -713,9 +708,11 @@ export default function Students({
                     alert("Please select a teacher.");
                     return;
                   }
+                  const matchingStudent = students.find(s => s.classroomTeacher === selectedTeacher && s.classroomTeacherEmail);
+                  const teacherEmail = matchingStudent ? matchingStudent.classroomTeacherEmail : "";
                   bulkUpdateStudents(selectedIds, { 
                     classroomTeacher: selectedTeacher,
-                    classroomTeacherEmail: guessTeacherEmail(selectedTeacher)
+                    classroomTeacherEmail: teacherEmail
                   });
                   setSelectedIds([]);
                   setShowTeacherModal(false);
@@ -864,7 +861,7 @@ export default function Students({
                       className="input-field"
                       style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
                       value={selectedStudent.classroomTeacherEmail || ""}
-                      placeholder={guessTeacherEmail(selectedStudent.classroomTeacher)}
+                      placeholder="lastname@rcschools.net"
                       onChange={(e) => {
                         const updated = { ...selectedStudent, classroomTeacherEmail: e.target.value };
                         setSelectedStudent(updated);

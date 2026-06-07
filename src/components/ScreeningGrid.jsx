@@ -92,7 +92,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       name: refName,
       grade: refGrade,
       classroomTeacher: refTeacher,
-      classroomTeacherEmail: refTeacherEmail.trim() || guessTeacherEmail(refTeacher),
+      classroomTeacherEmail: refTeacherEmail.trim(),
       school: "Blackman Middle School"
     });
 
@@ -167,7 +167,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
 
   const handleNudgeForStudent = (student) => {
     if (!student) return;
-    const email = student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher) || "teacher@rcschools.net";
+    const email = student.classroomTeacherEmail || "teacher@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${student.name}`);
     const body = encodeURIComponent(
@@ -923,22 +923,18 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                   value={refTeacher}
                   onChange={(e) => {
                     setRefTeacher(e.target.value);
-                    if (!isTeacherEmailCustom) {
-                      setRefTeacherEmail(guessTeacherEmail(e.target.value));
-                    }
                   }}
                 />
               </div>
               <div className="form-group">
-                <label>Teacher Email (Auto-Guessed)</label>
+                <label>Teacher Email</label>
                 <input 
                   type="email" 
                   className="input-field" 
-                  placeholder="e.g. thompson@rcschools.net"
+                  placeholder="lastname@rcschools.net"
                   value={refTeacherEmail}
                   onChange={(e) => {
                     setRefTeacherEmail(e.target.value);
-                    setIsTeacherEmailCustom(true);
                   }}
                 />
               </div>
@@ -1004,7 +1000,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                     </h3>
                     <div className="timeline-student-meta">
                       <span>Grade: <strong>{student.grade}</strong></span>
-                      <span>Teacher: <strong>{student.classroomTeacher}</strong> ({student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher)})</span>
+                      <span>Teacher: <strong>{student.classroomTeacher}</strong>{student.classroomTeacherEmail ? ` (${student.classroomTeacherEmail})` : ""}</span>
                       <span>School: <strong>{student.school}</strong></span>
                     </div>
                   </div>

@@ -965,7 +965,7 @@ class StudentStore {
         iepSharePointUploadCompleted: false,
         iepPhysicalFileCompleted: false,
         augustSetupComplete: false,
-        classroomTeacherEmail: student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher),
+        classroomTeacherEmail: student.classroomTeacherEmail || "",
         ...student
       }
     ];
@@ -995,7 +995,7 @@ class StudentStore {
       iepSharePointUploadCompleted: false,
       iepPhysicalFileCompleted: false,
       augustSetupComplete: false,
-      classroomTeacherEmail: student.classroomTeacherEmail || guessTeacherEmail(student.classroomTeacher),
+      classroomTeacherEmail: student.classroomTeacherEmail || "",
       ...student
     }));
 
@@ -1099,7 +1099,7 @@ class StudentStore {
         discontinuationPWNMailDate: false,
         discontinuationCumeFileDate: false,
         nudgeSent: false,
-        classroomTeacherEmail: candidate.classroomTeacherEmail || guessTeacherEmail(candidate.classroomTeacher),
+        classroomTeacherEmail: candidate.classroomTeacherEmail || "",
         matrix: {
           cognition: { instrument: "", score: "", points: 0 },
           performance: { instrument: "", score: "", points: 0 },
@@ -1146,7 +1146,7 @@ class StudentStore {
       grade: screening.grade,
       school: screening.school,
       classroomTeacher: screening.classroomTeacher,
-      classroomTeacherEmail: screening.classroomTeacherEmail || guessTeacherEmail(screening.classroomTeacher),
+      classroomTeacherEmail: screening.classroomTeacherEmail || "",
       status: "Active",
       iepReviewDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
       reevalDueDate: addDays(new Date().toISOString().split("T")[0], 3 * 365), // 3 years later

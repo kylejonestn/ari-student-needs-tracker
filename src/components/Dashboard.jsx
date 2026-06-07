@@ -86,7 +86,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   };
 
   const handleNudge = (screening) => {
-    const email = screening.classroomTeacherEmail || guessTeacherEmail(screening.classroomTeacher) || "teacher@rcschools.net";
+    const email = screening.classroomTeacherEmail || "teacher@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${screening.name}`);
     const body = encodeURIComponent(
