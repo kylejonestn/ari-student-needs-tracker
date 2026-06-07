@@ -35,8 +35,9 @@ export const driveService = {
         },
       });
 
-      // Show the popup
-      tokenClient.requestAccessToken({ prompt: "consent" });
+      // Show the popup. We omit prompt: "consent" so Google can use active session cookies
+      // and log in silently/smoothly if they have already authorized Aegis once.
+      tokenClient.requestAccessToken();
     } catch (err) {
       onError(`Authorization setup failed: ${err.message}`);
     }

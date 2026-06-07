@@ -70,11 +70,6 @@ export default function App() {
 
   // Trigger Google Login
   const handleConnectClick = () => {
-    if (!clientId) {
-      store.updateState({ activeTab: "settings" });
-      alert("Please enter your Google Cloud Client ID in Settings first.");
-      return;
-    }
     store.connectGoogleDrive();
   };
 
