@@ -57,13 +57,15 @@ export const isSchoolDay = (dateStr) => {
   return true;
 };
 
-// Add school days skipping weekends and RCS holidays
+// Add school days skipping weekends and RCS holidays (supports negative numbers)
 export const addSchoolDays = (dateStr, days) => {
   if (!dateStr) return "";
   let date = new Date(dateStr + "T12:00:00");
   let daysCount = 0;
-  while (daysCount < days) {
-    date.setDate(date.getDate() + 1);
+  const absDays = Math.abs(days);
+  const step = days >= 0 ? 1 : -1;
+  while (daysCount < absDays) {
+    date.setDate(date.getDate() + step);
     const yyyymmdd = date.toISOString().split("T")[0];
     if (isSchoolDay(yyyymmdd)) {
       daysCount++;
@@ -715,7 +717,10 @@ class StudentStore {
 
   // Google OAuth Log In
   connectGoogleDrive() {
-    const clientId = this.state.clientId || DEFAULT_CLIENT_ID;
+    let clientId = this.state.clientId;
+    if (!clientId || clientId === "null" || clientId === "undefined" || clientId.trim() === "") {
+      clientId = DEFAULT_CLIENT_ID;
+    }
     if (!clientId) {
       this.updateState({ syncStatus: "error", syncError: "Please enter a valid Google Client ID in Settings first." });
       return;

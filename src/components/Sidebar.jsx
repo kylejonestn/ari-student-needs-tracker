@@ -15,7 +15,8 @@ import {
   Sparkles,
   Sun,
   Moon,
-  ClipboardList
+  ClipboardList,
+  FileSignature
 } from "lucide-react";
 import { calculateTimelines } from "../utils/studentStore";
 
@@ -25,6 +26,7 @@ export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsPa
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "students", label: "Student Directory", icon: Users },
     { id: "screening", label: "Screening Center", icon: CheckSquare },
+    { id: "iep", label: "Write IEPs", icon: FileSignature },
     { id: "reeval", label: "Re-eval Center", icon: ClipboardList },
     { id: "progress", label: "Progress Reports", icon: FileText },
     { id: "sel", label: "SEL Studio", icon: Heart },

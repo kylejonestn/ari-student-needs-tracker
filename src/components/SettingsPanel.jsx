@@ -90,10 +90,8 @@ export default function SettingsPanel({
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* Two Column Settings */}
       <div className="dashboard-columns">
-        {/* Left Column: Cloud sync and connection parameters */}
+        {/* Left Column: Cloud database sync & notifications toggles */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          
-
           {/* Connection Operations */}
           <div className="glass-panel">
             <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -220,7 +218,10 @@ export default function SettingsPanel({
               </div>
             </div>
           </div>
+        </div>
 
+        {/* Right Column: Routing emails and Report Card Dates */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           {/* Email Settings Configuration */}
           <div className="glass-panel">
             <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -323,46 +324,58 @@ export default function SettingsPanel({
               </div>
             </form>
           </div>
+        </div>
+      </div>
 
-          {/* Client ID Configuration */}
-          <div className="glass-panel">
-            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Key size={18} color="var(--accent-purple)" />
-              Google Cloud API Credentials (Optional)
-            </h3>
-            
-            <form onSubmit={handleSaveClientId}>
-              <div className="form-group">
-                <label>OAuth 2.0 Client ID (Custom Override)</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  style={{ fontSize: "12px" }}
-                  placeholder={`Default System ID Active: ${DEFAULT_CLIENT_ID.substring(0, 20)}...`}
-                  value={tempClientId}
-                  onChange={(e) => setTempClientId(e.target.value)}
-                />
-                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  {tempClientId.trim() 
-                    ? "Custom Client ID configured. Aegis will use your custom credentials." 
-                    : "No custom Client ID entered. Aegis is running in Standard SSO Mode using default system credentials."}
-                </p>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                {showSavedMsg && (
-                  <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
-                    ✔ Configuration saved!
-                  </span>
-                )}
-                <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
-                  Save Custom ID
-                </button>
-              </div>
-            </form>
-          </div>
+      {/* Bottom Row: Google Cloud API Credentials & Setup Guide (Moved to Bottom) */}
+      <div 
+        style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", 
+          gap: "24px", 
+          marginTop: "16px", 
+          borderTop: "1px dashed var(--border-color)", 
+          paddingTop: "24px" 
+        }}
+      >
+        {/* Client ID Configuration */}
+        <div className="glass-panel" style={{ height: "fit-content" }}>
+          <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <Key size={18} color="var(--accent-purple)" />
+            Google Cloud API Credentials (Optional)
+          </h3>
+          
+          <form onSubmit={handleSaveClientId}>
+            <div className="form-group">
+              <label>OAuth 2.0 Client ID (Custom Override)</label>
+              <input 
+                type="text" 
+                className="input-field" 
+                style={{ fontSize: "12px" }}
+                placeholder={`Default System ID Active: ${DEFAULT_CLIENT_ID.substring(0, 20)}...`}
+                value={tempClientId}
+                onChange={(e) => setTempClientId(e.target.value)}
+              />
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                {tempClientId.trim() 
+                  ? "Custom Client ID configured. Aegis will use your custom credentials." 
+                  : "No custom Client ID entered. Aegis is running in Standard SSO Mode using default system credentials."}
+              </p>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {showSavedMsg && (
+                <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
+                  ✔ Configuration saved!
+                </span>
+              )}
+              <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
+                Save Custom ID
+              </button>
+            </div>
+          </form>
         </div>
 
-        {/* Right Column: Step-by-Step Google Console Help Guide */}
+        {/* Step-by-Step Google Console Help Guide */}
         <div className="glass-panel" style={{ height: "fit-content" }}>
           <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
             <HelpCircle size={18} color="var(--accent-purple)" />

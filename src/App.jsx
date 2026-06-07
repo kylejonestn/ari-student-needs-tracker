@@ -13,6 +13,7 @@ import ProgressReports from "./components/ProgressReports";
 import SelStudio from "./components/SelStudio";
 import ParentPortal from "./components/ParentPortal";
 import SettingsPanel from "./components/SettingsPanel";
+import IepPlanner from "./components/IepPlanner";
 import { Cloud, CloudOff, RefreshCw, Check, AlertCircle } from "lucide-react";
 
 export default function App() {
@@ -53,6 +54,8 @@ export default function App() {
         return { title: "Student Directory", subtitle: "Active gifted student database & accommodations" };
       case "screening":
         return { title: "Screening & Placement Matrix", subtitle: "Tennessee K-12 Gifted Scoring Grid (IGAM)" };
+      case "iep":
+        return { title: "Write IEPs Caseload Timeline", subtitle: "Annual IEP scheduling & checklist tracking" };
       case "reeval":
         return { title: "Re-evaluation Center", subtitle: "Triennial reviews & direct observation trackers" };
       case "progress":
@@ -195,6 +198,12 @@ export default function App() {
                   addScreening={(cand) => store.addScreening(cand)}
                   updateScreening={(id, fields) => store.updateScreening(id, fields)}
                   placeStudent={(id, accoms) => store.placeStudent(id, accoms)}
+                />
+              )}
+              {activeTab === "iep" && (
+                <IepPlanner
+                  students={students}
+                  updateStudent={(id, fields) => store.updateStudent(id, fields)}
                 />
               )}
               {activeTab === "reeval" && (
