@@ -966,6 +966,46 @@ class StudentStore {
     this.triggerCloudSave();
   }
 
+  // Bulk update student details
+  bulkUpdateStudents(studentIds, updatedFields) {
+    const updated = this.state.students.map(s => {
+      if (studentIds.includes(s.id)) {
+        return { ...s, ...updatedFields };
+      }
+      return s;
+    });
+    this.updateState({ students: updated });
+    this.triggerCloudSave();
+  }
+
+  // Bulk remove students from active list
+  bulkDeleteStudents(studentIds) {
+    const updated = this.state.students.filter(s => !studentIds.includes(s.id));
+    this.updateState({ students: updated });
+    this.triggerCloudSave();
+  }
+
+  // Bulk promote students to next grade (6th -> 7th -> 8th -> Inactive)
+  bulkPromoteStudents(studentIds) {
+    const updated = this.state.students.map(s => {
+      if (studentIds.includes(s.id)) {
+        let nextGrade = s.grade;
+        let nextStatus = s.status;
+        if (s.grade === "6th") {
+          nextGrade = "7th";
+        } else if (s.grade === "7th") {
+          nextGrade = "8th";
+        } else if (s.grade === "8th") {
+          nextStatus = "Inactive"; // Graduated middle school
+        }
+        return { ...s, grade: nextGrade, status: nextStatus };
+      }
+      return s;
+    });
+    this.updateState({ students: updated });
+    this.triggerCloudSave();
+  }
+
   // Add Student to Screening Center
   addScreening(candidate) {
     const updated = [

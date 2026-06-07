@@ -3,12 +3,28 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle } from "lucide-react";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X } from "lucide-react";
 
-export default function Students({ students, addStudent, addStudents, updateStudent }) {
+export default function Students({ 
+  students, 
+  addStudent, 
+  addStudents, 
+  updateStudent,
+  teacherEmails = {},
+  bulkUpdateStudents,
+  bulkDeleteStudents,
+  bulkPromoteStudents
+}) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  
+  // Bulk Selection and Dialog State
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showTeacherModal, setShowTeacherModal] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
 
   // Form State for Adding Student
   const [newName, setNewName] = useState("");
@@ -399,58 +415,366 @@ export default function Students({ students, addStudent, addStudents, updateStud
         </div>
       )}
 
+      {/* Select All Tool Strip */}
+      {filteredStudents.length > 0 && (
+        <div style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          gap: "10px", 
+          marginBottom: "16px", 
+          padding: "8px 16px",
+          borderRadius: "8px", 
+          backgroundColor: "var(--bg-sidebar)",
+          border: "1px solid var(--border-color)",
+          width: "fit-content"
+        }}>
+          <input 
+            type="checkbox" 
+            id="selectAllCheckbox"
+            checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.includes(s.id))}
+            onChange={(e) => {
+              if (e.target.checked) {
+                // Select all filtered students
+                const allFilteredIds = filteredStudents.map(s => s.id);
+                setSelectedIds(prev => {
+                  const combined = new Set([...prev, ...allFilteredIds]);
+                  return Array.from(combined);
+                });
+              } else {
+                // Unselect all filtered students
+                const filteredIdsSet = new Set(filteredStudents.map(s => s.id));
+                setSelectedIds(prev => prev.filter(id => !filteredIdsSet.has(id)));
+              }
+            }}
+            style={{ cursor: "pointer", width: "15px", height: "15px" }}
+          />
+          <label htmlFor="selectAllCheckbox" style={{ fontSize: "13px", fontWeight: "600", cursor: "pointer", userSelect: "none" }}>
+            Select All Filtered ({filteredStudents.length})
+          </label>
+          {selectedIds.length > 0 && (
+            <span style={{ fontSize: "12px", color: "var(--text-muted)", borderLeft: "1px solid var(--border-color)", paddingLeft: "10px" }}>
+              {selectedIds.length} Total Selected
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Main Students Grid */}
       <div className="students-grid">
-        {filteredStudents.map((student) => (
-          <div key={student.id} className="student-card">
-            <div className="student-card-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div className="student-initials">
-                  {student.name.split(" ").map((n) => n[0]).join("")}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: "16px", fontWeight: "700" }}>{student.name}</h3>
-                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>{student.grade} Grade</span>
-                </div>
-              </div>
-              <span className="student-card-tag" style={{ color: "var(--accent-purple)", borderColor: "var(--accent-purple)" }}>
-                {student.status}
-              </span>
-            </div>
-
-            <div className="student-details-list">
-              <span>
-                <label>Teacher:</label>
-                <span>{student.classroomTeacher}</span>
-              </span>
-              <span>
-                <label>IEP Annual Due:</label>
-                <span style={{ fontWeight: "600" }}>{student.iepReviewDate}</span>
-              </span>
-              <span>
-                <label>Accommodations:</label>
-                <span style={{ color: "var(--accent-purple)", fontWeight: "600" }}>
-                  {student.accommodations ? student.accommodations.length : 0} Logged
-                </span>
-              </span>
-            </div>
-
-            <button
-              className="btn btn-secondary"
-              style={{ width: "100%", padding: "6px", fontSize: "12px", marginTop: "8px" }}
-              onClick={() => setSelectedStudent(student)}
+        {filteredStudents.map((student) => {
+          const isSelected = selectedIds.includes(student.id);
+          return (
+            <div 
+              key={student.id} 
+              className="student-card"
+              style={isSelected ? { borderColor: "var(--accent-purple)", boxShadow: "0 0 10px rgba(168, 85, 247, 0.25)" } : {}}
             >
-              <BookOpen size={14} />
-              Open Accommodations & Profile
-            </button>
-          </div>
-        ))}
+              <div className="student-card-header">
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <input 
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => {
+                      if (isSelected) {
+                        setSelectedIds(prev => prev.filter(id => id !== student.id));
+                      } else {
+                        setSelectedIds(prev => [...prev, student.id]);
+                      }
+                    }}
+                    style={{ cursor: "pointer", width: "15px", height: "15px" }}
+                  />
+                  <div className="student-initials" style={isSelected ? { backgroundColor: "var(--accent-purple)", color: "#fff" } : {}}>
+                    {student.name.split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: "15px", fontWeight: "700" }}>{student.name}</h3>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{student.grade} Grade</span>
+                  </div>
+                </div>
+                <span className="student-card-tag" style={{ color: "var(--accent-purple)", borderColor: "var(--accent-purple)" }}>
+                  {student.status}
+                </span>
+              </div>
+
+              <div className="student-details-list">
+                <span>
+                  <label>Teacher:</label>
+                  <span>{student.classroomTeacher}</span>
+                </span>
+                <span>
+                  <label>IEP Annual Due:</label>
+                  <span style={{ fontWeight: "600" }}>{student.iepReviewDate}</span>
+                </span>
+                <span>
+                  <label>Accommodations:</label>
+                  <span style={{ color: "var(--accent-purple)", fontWeight: "600" }}>
+                    {student.accommodations ? student.accommodations.length : 0} Logged
+                  </span>
+                </span>
+              </div>
+
+              <button
+                className="btn btn-secondary"
+                style={{ width: "100%", padding: "6px", fontSize: "12px", marginTop: "8px" }}
+                onClick={() => setSelectedStudent(student)}
+              >
+                <BookOpen size={14} />
+                Open Accommodations & Profile
+              </button>
+            </div>
+          );
+        })}
         {filteredStudents.length === 0 && (
           <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
             No students found matching your search.
           </div>
         )}
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <>
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translate(-50%, 60px); opacity: 0; }
+              to { transform: translate(-50%, 0); opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            position: "fixed",
+            bottom: "24px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "rgba(25, 18, 40, 0.9)", 
+            backdropFilter: "blur(16px)",
+            border: "1px solid rgba(168, 85, 247, 0.3)",
+            boxShadow: "0 10px 40px 0 rgba(0, 0, 0, 0.4)",
+            borderRadius: "16px",
+            padding: "12px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            zIndex: 150,
+            animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            maxWidth: "95vw",
+            width: "max-content",
+            flexWrap: "wrap",
+            justifyContent: "space-between"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ 
+                backgroundColor: "var(--accent-purple)", 
+                color: "#fff", 
+                borderRadius: "50%", 
+                width: "22px", 
+                height: "22px", 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                fontSize: "11px", 
+                fontWeight: "700" 
+              }}>
+                {selectedIds.length}
+              </span>
+              <span style={{ fontWeight: "600", fontSize: "13px", color: "var(--text-heading)" }}>Selected</span>
+            </div>
+
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                style={{ padding: "6px 10px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px", backgroundColor: "var(--accent-purple)" }}
+                onClick={() => setShowPromoteConfirm(true)}
+              >
+                <ArrowUpCircle size={14} />
+                Promote Grade
+              </button>
+              
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: "6px 10px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" }}
+                onClick={() => {
+                  setSelectedTeacher("");
+                  setShowTeacherModal(true);
+                }}
+              >
+                <UserCheck size={14} />
+                Reassign Teacher
+              </button>
+
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: "6px 10px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" }}
+                onClick={() => {
+                  if (window.confirm(`Are you sure you want to archive ${selectedIds.length} student(s)? They will be moved to 'Inactive' status.`)) {
+                    bulkUpdateStudents(selectedIds, { status: "Inactive" });
+                    setSelectedIds([]);
+                  }
+                }}
+              >
+                <Archive size={14} />
+                Archive/Exit
+              </button>
+
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: "6px 10px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px", borderColor: "rgba(244, 63, 94, 0.4)", color: "var(--accent-rose)" }}
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                style={{ padding: "6px 10px", fontSize: "11px" }}
+                onClick={() => setSelectedIds([])}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Bulk Homeroom Reassignment Modal */}
+      {showTeacherModal && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 210, padding: "16px"
+        }}>
+          <div className="glass-panel" style={{ width: "100%", maxWidth: "400px", padding: "24px", backgroundColor: "var(--bg-sidebar)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "16px", fontWeight: "700" }}>Bulk Homeroom Reassignment</h3>
+              <button style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)" }} onClick={() => setShowTeacherModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="form-group" style={{ marginBottom: "20px" }}>
+              <label>Select Classroom Teacher</label>
+              <select 
+                className="select-field" 
+                value={selectedTeacher} 
+                onChange={(e) => setSelectedTeacher(e.target.value)}
+                style={{ width: "100%", marginTop: "6px" }}
+              >
+                <option value="">-- Choose Homeroom Teacher --</option>
+                {Object.keys(teacherEmails).map(teacher => (
+                  <option key={teacher} value={teacher}>{teacher}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "12px" }} onClick={() => setShowTeacherModal(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                style={{ padding: "6px 12px", fontSize: "12px" }} 
+                onClick={() => {
+                  if (!selectedTeacher) {
+                    alert("Please select a teacher.");
+                    return;
+                  }
+                  bulkUpdateStudents(selectedIds, { classroomTeacher: selectedTeacher });
+                  setSelectedIds([]);
+                  setShowTeacherModal(false);
+                }}
+              >
+                Assign Homeroom
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 210, padding: "16px"
+        }}>
+          <div className="glass-panel" style={{ width: "100%", maxWidth: "400px", padding: "24px", border: "1px solid var(--accent-rose)", backgroundColor: "var(--bg-sidebar)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--accent-rose)", display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <AlertCircle size={20} />
+              Permanently Delete Students?
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-main)", marginBottom: "20px", lineHeight: "1.5" }}>
+              You are about to permanently delete <strong>{selectedIds.length} student profile(s)</strong> and all associated IEP/Re-evaluation timelines. This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "12px" }} onClick={() => setShowDeleteConfirm(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                style={{ padding: "6px 12px", fontSize: "12px", backgroundColor: "var(--accent-rose)" }} 
+                onClick={() => {
+                  bulkDeleteStudents(selectedIds);
+                  setSelectedIds([]);
+                  setShowDeleteConfirm(false);
+                }}
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Promote Confirmation Modal */}
+      {showPromoteConfirm && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 210, padding: "16px"
+        }}>
+          <div className="glass-panel" style={{ width: "100%", maxWidth: "450px", padding: "24px", backgroundColor: "var(--bg-sidebar)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <ArrowUpCircle size={20} color="var(--accent-purple)" />
+              Bulk Promote Students?
+            </h3>
+            <p style={{ fontSize: "13px", color: "var(--text-main)", marginBottom: "12px", lineHeight: "1.5" }}>
+              You are promoting <strong>{selectedIds.length} student(s)</strong> to their next grade:
+            </p>
+            <ul style={{ fontSize: "12px", paddingLeft: "20px", marginBottom: "16px", listStyleType: "disc", display: "flex", flexDirection: "column", gap: "4px" }}>
+              <li>6th Grade students will move to <strong>7th Grade</strong>.</li>
+              <li>7th Grade students will move to <strong>8th Grade</strong>.</li>
+              <li>8th Grade students (Graduating Middle School) will move to <strong>Inactive/Archived</strong> status.</li>
+            </ul>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "12px" }} onClick={() => setShowPromoteConfirm(false)}>
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                style={{ padding: "6px 12px", fontSize: "12px", backgroundColor: "var(--accent-purple)" }} 
+                onClick={() => {
+                  bulkPromoteStudents(selectedIds);
+                  setSelectedIds([]);
+                  setShowPromoteConfirm(false);
+                }}
+              >
+                Promote Caseload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Student Profile & Accommodations Editor Drawer/Modal */}
       {selectedStudent && (

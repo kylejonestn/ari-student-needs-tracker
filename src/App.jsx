@@ -188,6 +188,10 @@ export default function App() {
                   addStudent={(student) => store.addStudent(student)}
                   addStudents={(studentsArr) => store.addStudents(studentsArr)}
                   updateStudent={(id, fields) => store.updateStudent(id, fields)}
+                  teacherEmails={storeState.teacherEmails}
+                  bulkUpdateStudents={(ids, fields) => store.bulkUpdateStudents(ids, fields)}
+                  bulkDeleteStudents={(ids) => store.bulkDeleteStudents(ids)}
+                  bulkPromoteStudents={(ids) => store.bulkPromoteStudents(ids)}
                 />
               )}
               {activeTab === "screening" && (
