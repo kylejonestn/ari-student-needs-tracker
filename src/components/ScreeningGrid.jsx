@@ -22,7 +22,9 @@ import {
 } from "lucide-react";
 
 export default function ScreeningGrid({ screenings, addScreening, updateScreening, placeStudent }) {
-  const [selectedScreenId, setSelectedScreenId] = useState(screenings[0]?.id || "");
+  // Read initial selection from store if present
+  const globalSelectedId = store.getState().selectedScreeningId;
+  const [selectedScreenId, setSelectedScreenId] = useState(globalSelectedId || screenings[0]?.id || "");
   const [showAddReferral, setShowAddReferral] = useState(false);
   
   // Referral Form State
@@ -38,6 +40,25 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       setSelectedScreenId(screenings[0].id);
     }
   }, [screenings, selectedScreenId]);
+
+  // Sync with global store selection changes (e.g. clicked on dashboard link)
+  useEffect(() => {
+    const checkGlobalSelection = () => {
+      const globalId = store.getState().selectedScreeningId;
+      if (globalId && globalId !== selectedScreenId) {
+        setSelectedScreenId(globalId);
+      }
+    };
+    
+    // Initial check
+    checkGlobalSelection();
+
+    // Subscribe to state changes
+    const unsubscribe = store.subscribe(() => {
+      checkGlobalSelection();
+    });
+    return unsubscribe;
+  }, [selectedScreenId]);
 
   const handleAddReferral = (e) => {
     e.preventDefault();
@@ -223,7 +244,10 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
           <select 
             className="select-field" 
             value={selectedScreenId} 
-            onChange={(e) => setSelectedScreenId(e.target.value)}
+            onChange={(e) => {
+              setSelectedScreenId(e.target.value);
+              store.updateState({ selectedScreeningId: e.target.value });
+            }}
             style={{ minWidth: "250px" }}
           >
             {screenings.map(s => (
