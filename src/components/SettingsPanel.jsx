@@ -93,42 +93,6 @@ export default function SettingsPanel({
         {/* Left Column: Cloud sync and connection parameters */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           
-          {/* Client ID Configuration */}
-          <div className="glass-panel">
-            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Key size={18} color="var(--accent-purple)" />
-              Google Cloud API Credentials (Optional)
-            </h3>
-            
-            <form onSubmit={handleSaveClientId}>
-              <div className="form-group">
-                <label>OAuth 2.0 Client ID (Custom Override)</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  style={{ fontSize: "12px" }}
-                  placeholder={`Default System ID Active: ${DEFAULT_CLIENT_ID.substring(0, 20)}...`}
-                  value={tempClientId}
-                  onChange={(e) => setTempClientId(e.target.value)}
-                />
-                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
-                  {tempClientId.trim() 
-                    ? "Custom Client ID configured. Aegis will use your custom credentials." 
-                    : "No custom Client ID entered. Aegis is running in Standard SSO Mode using default system credentials."}
-                </p>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                {showSavedMsg && (
-                  <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
-                    ✔ Configuration saved!
-                  </span>
-                )}
-                <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
-                  Save Custom ID
-                </button>
-              </div>
-            </form>
-          </div>
 
           {/* Connection Operations */}
           <div className="glass-panel">
@@ -355,6 +319,43 @@ export default function SettingsPanel({
                 )}
                 <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
                   Save Calendar Dates
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Client ID Configuration */}
+          <div className="glass-panel">
+            <h3 style={{ fontSize: "16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Key size={18} color="var(--accent-purple)" />
+              Google Cloud API Credentials (Optional)
+            </h3>
+            
+            <form onSubmit={handleSaveClientId}>
+              <div className="form-group">
+                <label>OAuth 2.0 Client ID (Custom Override)</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  style={{ fontSize: "12px" }}
+                  placeholder={`Default System ID Active: ${DEFAULT_CLIENT_ID.substring(0, 20)}...`}
+                  value={tempClientId}
+                  onChange={(e) => setTempClientId(e.target.value)}
+                />
+                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                  {tempClientId.trim() 
+                    ? "Custom Client ID configured. Aegis will use your custom credentials." 
+                    : "No custom Client ID entered. Aegis is running in Standard SSO Mode using default system credentials."}
+                </p>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {showSavedMsg && (
+                  <span style={{ color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600" }}>
+                    ✔ Configuration saved!
+                  </span>
+                )}
+                <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "12px", marginLeft: "auto" }}>
+                  Save Custom ID
                 </button>
               </div>
             </form>
