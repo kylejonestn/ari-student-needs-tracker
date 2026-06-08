@@ -46,8 +46,6 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const [refName, setRefName] = useState("");
   const [refGrade, setRefGrade] = useState("6th");
   const [refTeacher, setRefTeacher] = useState("");
-  const [refTeacherEmail, setRefTeacherEmail] = useState("");
-  const [isTeacherEmailCustom, setIsTeacherEmailCustom] = useState(false);
 
   const [viewMode, setViewMode] = useState("timeline");
   const [expandedStudentId, setExpandedStudentId] = useState(null);
@@ -102,14 +100,11 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       name: refName,
       grade: refGrade,
       classroomTeacher: refTeacher,
-      classroomTeacherEmail: refTeacherEmail.trim(),
       school: "Blackman Middle School"
     });
 
     setRefName("");
     setRefTeacher("");
-    setRefTeacherEmail("");
-    setIsTeacherEmailCustom(false);
     setShowAddReferral(false);
     
     // Auto-select newly created referral
@@ -177,7 +172,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
 
   const handleNudgeForStudent = (student) => {
     if (!student) return;
-    const email = student.classroomTeacherEmail || "teacher@rcschools.net";
+    const email = store.getState().workEmail || "ariel.facilitator@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${student.name}`);
     const body = encodeURIComponent(
@@ -923,31 +918,18 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                 </select>
               </div>
             </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Classroom Core Referral Teacher</label>
-                <input 
-                  type="text" 
-                  className="input-field" 
-                  placeholder="e.g. Mr. Thompson"
-                  value={refTeacher}
-                  onChange={(e) => {
-                    setRefTeacher(e.target.value);
-                  }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Teacher Email</label>
-                <input 
-                  type="email" 
-                  className="input-field" 
-                  placeholder="lastname@rcschools.net"
-                  value={refTeacherEmail}
-                  onChange={(e) => {
-                    setRefTeacherEmail(e.target.value);
-                  }}
-                />
-              </div>
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label>Classroom Core Referral Teacher</label>
+              <input 
+                type="text" 
+                className="input-field" 
+                placeholder="e.g. Mr. Thompson"
+                style={{ width: "100%" }}
+                value={refTeacher}
+                onChange={(e) => {
+                  setRefTeacher(e.target.value);
+                }}
+              />
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "12px" }}>
               <button type="button" className="btn btn-secondary" onClick={() => setShowAddReferral(false)}>Cancel</button>
@@ -1010,7 +992,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                     </h3>
                     <div className="timeline-student-meta">
                       <span>Grade: <strong>{student.grade}</strong></span>
-                      <span>Teacher: <strong>{student.classroomTeacher}</strong>{student.classroomTeacherEmail ? ` (${student.classroomTeacherEmail})` : ""}</span>
+                      <span>Teacher: <strong>{student.classroomTeacher}</strong></span>
                       <span>School: <strong>{student.school}</strong></span>
                     </div>
                   </div>

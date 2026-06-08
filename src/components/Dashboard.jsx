@@ -194,7 +194,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   };
 
   const handleNudge = (screening) => {
-    const email = screening.classroomTeacherEmail || "teacher@rcschools.net";
+    const email = store.getState().workEmail || "ariel.facilitator@rcschools.net";
     
     const subject = encodeURIComponent(`[Aegis Gifted Checklist] Traits needed for ${screening.name}`);
     const body = encodeURIComponent(
@@ -213,7 +213,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     window.location.href = mailtoUrl;
 
     updateScreening(screening.id, { nudgeSent: true });
-    pushActivity(`Opened Mailto: Email nudge generated for ${screening.classroomTeacher} (${email}) regarding ${screening.name}.`);
+    pushActivity(`Opened Mailto: Email nudge draft generated to self (${email}) for forwarding to ${screening.classroomTeacher}.`);
   };
 
   const handleFollowUpInvitation = (student) => {

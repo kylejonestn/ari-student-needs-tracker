@@ -34,16 +34,10 @@ export default function Reevaluation({ students, updateStudent }) {
     return day !== 1 && day !== 4; // Monday = 1, Thursday = 4
   };
 
-  // Helper to look up or guess classroom teacher's email
-  const getTeacherEmail = (student) => {
-    if (!student) return "teacher@rcschools.net";
-    return student.classroomTeacherEmail || "teacher@rcschools.net";
-  };
-
   // Handle survey request email mailto generator
   const handleEmailTeacherSurvey = () => {
     if (!activeStudent) return;
-    const email = getTeacherEmail(activeStudent);
+    const email = store.getState().workEmail || "ariel.facilitator@rcschools.net";
     const subject = encodeURIComponent(`[Aegis Action Required] Gifted Re-evaluation Survey for ${activeStudent.name}`);
     const body = encodeURIComponent(
       `Hi ${activeStudent.classroomTeacher || "Teacher"},\n\n` +

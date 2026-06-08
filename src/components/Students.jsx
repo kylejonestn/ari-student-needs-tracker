@@ -31,8 +31,6 @@ export default function Students({
   const [newName, setNewName] = useState("");
   const [newGrade, setNewGrade] = useState("6th");
   const [newTeacher, setNewTeacher] = useState("");
-  const [newTeacherEmail, setNewTeacherEmail] = useState("");
-  const [isTeacherEmailCustom, setIsTeacherEmailCustom] = useState(false);
   const [newIepDate, setNewIepDate] = useState("");
   const [newReevalDate, setNewReevalDate] = useState("");
   const [newAccommodations, setNewAccommodations] = useState("");
@@ -264,7 +262,6 @@ export default function Students({
       name: newName,
       grade: newGrade,
       school: "Blackman Middle School",
-      classroomTeacherEmail: newTeacherEmail.trim(),
       iepReviewDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
@@ -273,8 +270,6 @@ export default function Students({
     // Reset Form
     setNewName("");
     setNewTeacher("");
-    setNewTeacherEmail("");
-    setIsTeacherEmailCustom(false);
     setNewIepDate("");
     setNewReevalDate("");
     setNewAccommodations("");
@@ -364,31 +359,18 @@ export default function Students({
               </div>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label>Classroom Core Teacher *</label>
-                <input
-                  type="text"
-                  className="input-field"
-                  placeholder="e.g. Mrs. Harrison (ELA)"
-                  value={newTeacher}
-                  onChange={(e) => {
-                    setNewTeacher(e.target.value);
-                  }}
-                />
-              </div>
-              <div className="form-group">
-                <label>Classroom Teacher Email</label>
-                <input
-                  type="email"
-                  className="input-field"
-                  placeholder="lastname@rcschools.net"
-                  value={newTeacherEmail}
-                  onChange={(e) => {
-                    setNewTeacherEmail(e.target.value);
-                  }}
-                />
-              </div>
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label>Classroom Core Teacher *</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="e.g. Mrs. Harrison (ELA)"
+                style={{ width: "100%" }}
+                value={newTeacher}
+                onChange={(e) => {
+                  setNewTeacher(e.target.value);
+                }}
+              />
             </div>
 
             <div className="form-group" style={{ marginBottom: "16px" }}>
@@ -708,11 +690,8 @@ export default function Students({
                     alert("Please select a teacher.");
                     return;
                   }
-                  const matchingStudent = students.find(s => s.classroomTeacher === selectedTeacher && s.classroomTeacherEmail);
-                  const teacherEmail = matchingStudent ? matchingStudent.classroomTeacherEmail : "";
                   bulkUpdateStudents(selectedIds, { 
-                    classroomTeacher: selectedTeacher,
-                    classroomTeacherEmail: teacherEmail
+                    classroomTeacher: selectedTeacher
                   });
                   setSelectedIds([]);
                   setShowTeacherModal(false);
@@ -840,7 +819,7 @@ export default function Students({
               <div>
                 <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase" }}>General Info</h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", fontSize: "13px" }}>
-                  <div>
+                  <div style={{ gridColumn: "1 / -1" }}>
                     <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Classroom Teacher:</label>
                     <input
                       type="text"
@@ -851,21 +830,6 @@ export default function Students({
                         const updated = { ...selectedStudent, classroomTeacher: e.target.value };
                         setSelectedStudent(updated);
                         updateStudent(selectedStudent.id, { classroomTeacher: e.target.value });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Classroom Teacher Email:</label>
-                    <input
-                      type="email"
-                      className="input-field"
-                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
-                      value={selectedStudent.classroomTeacherEmail || ""}
-                      placeholder="lastname@rcschools.net"
-                      onChange={(e) => {
-                        const updated = { ...selectedStudent, classroomTeacherEmail: e.target.value };
-                        setSelectedStudent(updated);
-                        updateStudent(selectedStudent.id, { classroomTeacherEmail: e.target.value });
                       }}
                     />
                   </div>
