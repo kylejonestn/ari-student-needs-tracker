@@ -1106,7 +1106,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                         return (
                           <div 
                             key={idx} 
-                            className={`pizza-tracker-step ${stepClass}`}
+                            className={`pizza-tracker-step ${stepClass} ${selectedStep === idx ? "selected" : ""}`}
                             onClick={() => {
                               setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: idx }));
                               setExpandedStudentId(student.id);
@@ -1138,28 +1138,6 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                           ? "Discontinuation Tasks" 
                           : `Workflow Step Details: ${timelineStages[selectedStep].label}`}
                       </h4>
-                      {student.status !== "Pending Discontinuation" && (
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          {timelineStages.map((_, idx) => (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: idx }))}
-                              style={{ 
-                                padding: "4px 8px", 
-                                fontSize: "11px", 
-                                borderRadius: "4px",
-                                border: "1px solid var(--border-color)",
-                                backgroundColor: selectedStep === idx ? "var(--accent-purple)" : "transparent",
-                                color: selectedStep === idx ? "white" : "var(--text-main)",
-                                cursor: "pointer"
-                              }}
-                            >
-                              Step {idx + 1}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                     {renderStepContent(student, selectedStep)}
                   </div>

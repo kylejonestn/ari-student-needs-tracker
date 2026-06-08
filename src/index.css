@@ -1101,6 +1101,35 @@ button, input, select, textarea {
   color: var(--accent-emerald);
 }
 
+.pizza-tracker-step.selected .pizza-tracker-dot {
+  outline: 3px solid var(--accent-purple);
+  outline-offset: 3px;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+  transform: scale(1.1);
+}
+
+.pizza-tracker-step.selected.completed .pizza-tracker-dot {
+  outline-color: var(--accent-emerald);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+}
+
+.pizza-tracker-step.selected.warning .pizza-tracker-dot {
+  outline-color: var(--accent-rose);
+  box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+}
+
+.pizza-tracker-step.selected .pizza-tracker-label {
+  color: var(--text-heading) !important;
+  font-weight: 700 !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.pizza-tracker-step.selected .pizza-tracker-date {
+  color: var(--text-heading) !important;
+  font-weight: 600;
+}
+
 /* Caseload Timeline Cards */
 .timeline-card-glass {
   background-color: var(--bg-card);

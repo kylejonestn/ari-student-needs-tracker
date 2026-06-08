@@ -797,7 +797,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                     return (
                       <div 
                         key={idx} 
-                        className={`pizza-tracker-step ${stepClass}`}
+                        className={`pizza-tracker-step ${stepClass} ${selectedStep === idx ? "selected" : ""}`}
                         onClick={() => {
                           setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: idx }));
                           setExpandedStudentId(student.id);
@@ -831,27 +831,6 @@ export default function IepPlanner({ students = [], updateStudent }) {
                     <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--accent-purple)", margin: 0 }}>
                       Workflow Step Details: {iepStages[selectedStep].label}
                     </h4>
-                    
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      {iepStages.map((_, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => setSelectedStepIndexByStudent(prev => ({ ...prev, [student.id]: idx }))}
-                          style={{ 
-                            padding: "4px 8px", 
-                            fontSize: "11px", 
-                            borderRadius: "4px",
-                            border: "1px solid var(--border-color)",
-                            backgroundColor: selectedStep === idx ? "var(--accent-purple)" : "transparent",
-                            color: selectedStep === idx ? "white" : "var(--text-main)",
-                            cursor: "pointer"
-                          }}
-                        >
-                          Step {idx + 1}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   <div className="glass-panel" style={{ padding: "16px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid var(--border-color)", borderRadius: "8px" }}>
