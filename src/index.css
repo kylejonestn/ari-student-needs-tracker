@@ -439,7 +439,11 @@ button, input, select, textarea {
   padding: 16px;
   border-radius: var(--radius-md);
   border-left: 4px solid var(--border-color);
-  background: var(--bg-sidebar);
+  border-top: 1px solid var(--border-glass);
+  border-right: 1px solid var(--border-glass);
+  border-bottom: 1px solid var(--border-glass);
+  background: var(--bg-card);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: var(--transition-fast);
 }
 
