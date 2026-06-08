@@ -946,6 +946,28 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
             const isExpanded = expandedStudentId === student.id;
             const currentStageIndex = phases.indexOf(student.status);
             
+            const getStageDueDate = (idx) => {
+              const refDate = student.referralDate || new Date().toISOString().split("T")[0];
+              switch (idx) {
+                case 0:
+                  return addSchoolDays(refDate, 5);
+                case 1:
+                  return addDays(refDate, 10);
+                case 2:
+                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 60) : "TBD";
+                case 3:
+                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 65) : "TBD";
+                case 4:
+                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 75) : "TBD";
+                case 5:
+                  return student.permissionToTestReceivedDate ? addDays(student.permissionToTestReceivedDate, 60) : "TBD";
+                case 6:
+                  return student.meetingDate || "TBD";
+                default:
+                  return "";
+              }
+            };
+
             // Stages of the screening stepper
             const timelineStages = [
               { label: "Quick Survey", status: "Quick Survey" },
@@ -1094,6 +1116,12 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                               {isCompleted ? "✔" : idx + 1}
                             </div>
                             <span className="pizza-tracker-label">{stage.label}</span>
+                            <span className="pizza-tracker-date" style={{
+                              fontSize: "10px",
+                              color: "var(--text-muted)",
+                              marginTop: "2px",
+                              display: "block"
+                            }}>{getStageDueDate(idx)}</span>
                           </div>
                         );
                       })}

@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { store, addSchoolDays, getDaysRemaining } from "../utils/studentStore";
+import { store, addDays, addSchoolDays, getDaysRemaining } from "../utils/studentStore";
 import { 
   Calendar, 
   Check, 
@@ -95,6 +95,28 @@ export default function IepPlanner({ students = [], updateStudent }) {
     { label: "Drafting & Delivery", short: "Draft & Deliv" },
     { label: "Meeting & Finalize", short: "Finalize" }
   ];
+
+  const getStageDueDate = (student, idx) => {
+    const meetingDate = student.iepMeetingDate;
+    switch (idx) {
+      case 0:
+        return "2026-08-15";
+      case 1:
+        return meetingDate ? addDays(meetingDate, -25) : "TBD";
+      case 2:
+        return meetingDate ? addDays(meetingDate, -20) : "TBD";
+      case 3:
+        return meetingDate ? addDays(meetingDate, -15) : "TBD";
+      case 4:
+        return meetingDate ? addSchoolDays(meetingDate, -7) : "TBD";
+      case 5:
+        return meetingDate ? addSchoolDays(meetingDate, -4) : "TBD";
+      case 6:
+        return meetingDate || "TBD";
+      default:
+        return "";
+    }
+  };
 
   // 1. Friday Signatures Checklist aggregation
   const fridayStudents = activeStudents.filter(
@@ -790,6 +812,12 @@ export default function IepPlanner({ students = [], updateStudent }) {
                         <span className="pizza-tracker-label" style={{
                           color: isCompleted && currentStageIndex >= 7 ? "var(--accent-emerald)" : ""
                         }}>{stage.short}</span>
+                        <span className="pizza-tracker-date" style={{
+                          fontSize: "10px",
+                          color: "var(--text-muted)",
+                          marginTop: "2px",
+                          display: "block"
+                        }}>{getStageDueDate(student, idx)}</span>
                       </div>
                     );
                   })}
