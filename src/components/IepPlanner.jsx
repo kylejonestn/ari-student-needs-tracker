@@ -31,6 +31,15 @@ const getCalendarDaysDiff = (dateStr1, dateStr2) => {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr || dateStr === "TBD") return dateStr;
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  }
+  return dateStr;
+};
+
 // Helper to determine the current active stage dynamically (0 to 7)
 const getIepStageIndex = (student) => {
   const isStage0Complete = student.augustSetupComplete || (student.iepAugustLetterSent && student.iepGenEdInvitesSent);
@@ -96,26 +105,35 @@ export default function IepPlanner({ students = [], updateStudent }) {
     { label: "Meeting & Finalize", short: "Finalize" }
   ];
 
-  const getStageDueDate = (student, idx) => {
+  const getStageDueDate = (student, idx, raw = false) => {
     const meetingDate = student.iepMeetingDate;
+    let val = "";
     switch (idx) {
       case 0:
-        return "2026-08-15";
+        val = "2026-08-15";
+        break;
       case 1:
-        return meetingDate ? addDays(meetingDate, -25) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -25) : "TBD";
+        break;
       case 2:
-        return meetingDate ? addDays(meetingDate, -20) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -20) : "TBD";
+        break;
       case 3:
-        return meetingDate ? addDays(meetingDate, -15) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -15) : "TBD";
+        break;
       case 4:
-        return meetingDate ? addSchoolDays(meetingDate, -7) : "TBD";
+        val = meetingDate ? addSchoolDays(meetingDate, -7) : "TBD";
+        break;
       case 5:
-        return meetingDate ? addSchoolDays(meetingDate, -4) : "TBD";
+        val = meetingDate ? addSchoolDays(meetingDate, -4) : "TBD";
+        break;
       case 6:
-        return meetingDate || "TBD";
+        val = meetingDate || "TBD";
+        break;
       default:
-        return "";
+        val = "";
     }
+    return raw ? val : formatDate(val);
   };
 
   // 1. Friday Signatures Checklist aggregation
@@ -794,6 +812,10 @@ export default function IepPlanner({ students = [], updateStudent }) {
                     else if (isActive) stepClass = "active";
                     else if (isCompleted) stepClass = "completed";
 
+                    const rawDate = getStageDueDate(student, idx, true);
+                    const isPast = rawDate && rawDate !== "TBD" && getDaysRemaining(rawDate) < 0;
+                    const dateClass = isCompleted && isPast ? "completed-past" : "";
+
                     return (
                       <div 
                         key={idx} 
@@ -812,7 +834,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                         <span className="pizza-tracker-label" style={{
                           color: isCompleted && currentStageIndex >= 7 ? "var(--accent-emerald)" : ""
                         }}>{stage.short}</span>
-                        <span className="pizza-tracker-date" style={{
+                        <span className={`pizza-tracker-date ${dateClass}`} style={{
                           fontSize: "10px",
                           color: "var(--text-muted)",
                           marginTop: "2px",

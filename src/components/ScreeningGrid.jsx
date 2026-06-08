@@ -25,6 +25,15 @@ import {
   List
 } from "lucide-react";
 
+const formatDate = (dateStr) => {
+  if (!dateStr || dateStr === "TBD") return dateStr;
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+  }
+  return dateStr;
+};
+
 const phases = [
   "Quick Survey",
   "Consent Pending",
@@ -946,26 +955,35 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
             const isExpanded = expandedStudentId === student.id;
             const currentStageIndex = phases.indexOf(student.status);
             
-            const getStageDueDate = (idx) => {
+            const getStageDueDate = (idx, raw = false) => {
               const refDate = student.referralDate || new Date().toISOString().split("T")[0];
+              let val = "";
               switch (idx) {
                 case 0:
-                  return addSchoolDays(refDate, 5);
+                  val = addSchoolDays(refDate, 5);
+                  break;
                 case 1:
-                  return addDays(refDate, 10);
+                  val = addDays(refDate, 10);
+                  break;
                 case 2:
-                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 60) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 60) : "TBD";
+                  break;
                 case 3:
-                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 65) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 65) : "TBD";
+                  break;
                 case 4:
-                  return student.consentReceivedDate ? addDays(student.consentReceivedDate, 75) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 75) : "TBD";
+                  break;
                 case 5:
-                  return student.permissionToTestReceivedDate ? addDays(student.permissionToTestReceivedDate, 60) : "TBD";
+                  val = student.permissionToTestReceivedDate ? addDays(student.permissionToTestReceivedDate, 60) : "TBD";
+                  break;
                 case 6:
-                  return student.meetingDate || "TBD";
+                  val = student.meetingDate || "TBD";
+                  break;
                 default:
-                  return "";
+                  val = "";
               }
+              return raw ? val : formatDate(val);
             };
 
             // Stages of the screening stepper
@@ -1103,6 +1121,10 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                         else if (isActive) stepClass = "active";
                         else if (isCompleted) stepClass = "completed";
 
+                        const rawDate = getStageDueDate(idx, true);
+                        const isPast = rawDate && rawDate !== "TBD" && getDaysRemaining(rawDate) < 0;
+                        const dateClass = isCompleted && isPast ? "completed-past" : "";
+
                         return (
                           <div 
                             key={idx} 
@@ -1116,7 +1138,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                               {isCompleted ? "✔" : idx + 1}
                             </div>
                             <span className="pizza-tracker-label">{stage.label}</span>
-                            <span className="pizza-tracker-date" style={{
+                            <span className={`pizza-tracker-date ${dateClass}`} style={{
                               fontSize: "10px",
                               color: "var(--text-muted)",
                               marginTop: "2px",

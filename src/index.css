@@ -1125,6 +1125,19 @@ button, input, select, textarea {
   text-underline-offset: 3px;
 }
 
+.pizza-tracker-date {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  display: block;
+}
+.pizza-tracker-date.completed-past {
+  color: var(--text-muted) !important;
+  opacity: 0.45 !important;
+  font-weight: 500 !important;
+  text-decoration: none !important;
+}
+
 .pizza-tracker-step.selected .pizza-tracker-date {
   color: var(--text-heading) !important;
   font-weight: 600;
