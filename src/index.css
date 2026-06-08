@@ -1121,8 +1121,6 @@ button, input, select, textarea {
 .pizza-tracker-step.selected .pizza-tracker-label {
   color: var(--text-heading) !important;
   font-weight: 700 !important;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 .pizza-tracker-date {
