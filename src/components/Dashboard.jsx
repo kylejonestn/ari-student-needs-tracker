@@ -31,14 +31,116 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
   const [showAugustSetup, setShowAugustSetup] = useState(false);
   const [screeningsExpanded, setScreeningsExpanded] = useState(false);
+  const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "warning", "overdue"
+
+  const handleTimelineClick = (t) => {
+    if (t.category === "Screening") {
+      let stepIndex = 0;
+      switch (t.type) {
+        case "Quick Survey":
+          stepIndex = 0;
+          break;
+        case "Consent Pending":
+          stepIndex = 1;
+          break;
+        case "60-Day Evaluation":
+        case "Teacher Input Checklist":
+        case "Academic Check-in":
+        case "Creativity Check-in":
+          stepIndex = 2;
+          break;
+        case "Informed Consent":
+          stepIndex = 3;
+          break;
+        case "Permission to Test":
+          stepIndex = 4;
+          break;
+        case "Psychologist 60-Day Evaluation":
+        case "Psychologist Check-in":
+          stepIndex = 5;
+          break;
+        case "Placement Meeting":
+        case "Meeting Invitation":
+          stepIndex = 6;
+          break;
+        case "Pending Discontinuation":
+          stepIndex = 7;
+          break;
+        default:
+          stepIndex = 0;
+      }
+      store.updateState({
+        activeTab: "screening",
+        selectedScreeningId: t.studentId,
+        selectedScreeningStepIndex: stepIndex
+      });
+    } else if (t.category === "Active") {
+      if (t.type === "IEP Progress Report") {
+        const quarterMatch = t.label ? t.label.match(/Q[1-4]/) : null;
+        const quarter = quarterMatch ? quarterMatch[0] : "Q4";
+        store.updateState({
+          activeTab: "progress",
+          selectedProgressStudentId: t.studentId,
+          selectedProgressQuarter: quarter
+        });
+      } else if (
+        t.type === "Triennial Re-evaluation" ||
+        t.type === "Re-eval Invitation" ||
+        t.type === "Re-eval Observation" ||
+        t.type === "Re-eval Psych Handoff"
+      ) {
+        store.updateState({
+          activeTab: "reeval",
+          selectedReevalStudentId: t.studentId
+        });
+      } else {
+        let stepIndex = 0;
+        switch (t.type) {
+          case "August Setup":
+          case "August Calendar":
+            stepIndex = 0;
+            break;
+          case "Annual IEP Review":
+            stepIndex = 1;
+            break;
+          case "IEP Invitation":
+          case "IEP Invitation Follow-Up":
+            stepIndex = 2;
+            break;
+          case "IEP Transition Survey":
+            stepIndex = 3;
+            break;
+          case "IEP Data Mining":
+            stepIndex = 4;
+            break;
+          case "IEP Writing":
+          case "IEP Send Draft":
+            stepIndex = 5;
+            break;
+          case "IEP Finalization":
+          case "IEP Print Glance":
+          case "IEP Friday Signatures":
+            stepIndex = 6;
+            break;
+          default:
+            stepIndex = 0;
+        }
+        store.updateState({
+          activeTab: "iep",
+          selectedIepStudentId: t.studentId,
+          selectedIepStepIndex: stepIndex
+        });
+      }
+    }
+  };
 
   // Aggregate stats
   const activeCount = students.filter(s => s.status === "Active").length;
   const screeningCount = screenings.filter(s => s.status !== "Pending Discontinuation" && s.status !== "Completed").length;
   
   // Consolidate all timelines
-  const activeTimelines = students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentId: s.id, studentName: s.name, type: "Active" })));
-  const screeningTimelines = screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentId: s.id, studentName: s.name, type: "Screening" })));
+  const activeTimelines = students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Active" })));
+  const screeningTimelines = screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Screening" })));
   
   const rawTimelines = [...activeTimelines, ...screeningTimelines];
   
@@ -74,6 +176,12 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     
     return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
   }).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
+
+  const displayedTimelines = allTimelines.filter(t => {
+    if (timelineFilter === "warning") return t.status === "warning";
+    if (timelineFilter === "overdue") return t.status === "overdue";
+    return true;
+  });
 
   // Friday bulk signatures checklist students
   const fridaySignatureStudents = students.filter(
@@ -160,7 +268,14 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     <div>
       {/* Quick Stats Banner */}
       <div className="stats-grid">
-        <div className="glass-panel stat-card">
+        <div 
+          className="glass-panel stat-card"
+          onClick={() => store.updateState({ activeTab: "students" })}
+          style={{ 
+            cursor: "pointer",
+            transition: "all var(--transition-normal)"
+          }}
+        >
           <div className="stat-icon purple">
             <Users size={24} />
           </div>
@@ -242,7 +357,16 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           )}
         </div>
 
-        <div className="glass-panel stat-card">
+        <div 
+          className="glass-panel stat-card"
+          onClick={() => setTimelineFilter(prev => prev === "warning" ? "all" : "warning")}
+          style={{ 
+            cursor: "pointer",
+            transition: "all var(--transition-normal)",
+            border: timelineFilter === "warning" ? "2px solid var(--accent-amber)" : "2px solid transparent",
+            boxShadow: timelineFilter === "warning" ? "0 0 12px rgba(245, 158, 11, 0.4)" : "none"
+          }}
+        >
           <div className="stat-icon amber">
             <AlertTriangle size={24} />
           </div>
@@ -252,7 +376,16 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           </div>
         </div>
 
-        <div className="glass-panel stat-card">
+        <div 
+          className="glass-panel stat-card"
+          onClick={() => setTimelineFilter(prev => prev === "overdue" ? "all" : "overdue")}
+          style={{ 
+            cursor: "pointer",
+            transition: "all var(--transition-normal)",
+            border: timelineFilter === "overdue" ? "2px solid var(--accent-rose)" : "2px solid transparent",
+            boxShadow: timelineFilter === "overdue" ? "0 0 12px rgba(244, 63, 94, 0.4)" : "none"
+          }}
+        >
           <div className="stat-icon rose">
             <Bell size={24} />
           </div>
@@ -346,54 +479,67 @@ export default function Dashboard({ students, screenings, updateScreening }) {
       <div className="dashboard-columns">
         {/* Left Column: Tennessee Special Ed Timeline Checklist */}
         <div className="glass-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <div className="section-header">
+          <div className="timeline-header">
             <div>
               <h2>Weekly Timeline & Due Summaries</h2>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
                 Tennessee Special Education mandate countdowns
               </p>
             </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <button 
-                className="btn btn-secondary hide-print" 
-                style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", borderColor: showAugustSetup ? "var(--accent-purple)" : "transparent" }}
-                onClick={() => setShowAugustSetup(!showAugustSetup)}
-              >
-                <ClipboardList size={12} />
-                August Caseload Setup
-              </button>
-              <button 
-                className="btn btn-primary hide-print" 
-                style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                onClick={() => store.sendWeeklyEmail()}
-              >
-                <Send size={12} />
-                Email Weekly Summary
-              </button>
-              <button 
-                className="btn btn-secondary hide-print" 
-                style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                onClick={() => window.print()}
-              >
-                <Printer size={12} />
-                Print Weekly Checklist
-              </button>
-              <span className="timeline-badge warning hide-print" style={{ fontWeight: "700" }}>RCS Schedule</span>
-            </div>
+            <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>RCS Schedule</span>
+          </div>
+
+          <div className="timeline-actions hide-print">
+            <button 
+              className="btn btn-secondary" 
+              style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", borderColor: showAugustSetup ? "var(--accent-purple)" : "transparent" }}
+              onClick={() => setShowAugustSetup(!showAugustSetup)}
+            >
+              <ClipboardList size={12} />
+              August Caseload Setup
+            </button>
+            <button 
+              className="btn btn-primary" 
+              style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              onClick={() => store.sendWeeklyEmail()}
+            >
+              <Send size={12} />
+              Email Weekly Summary
+            </button>
+            <button 
+              className="btn btn-secondary" 
+              style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              onClick={() => window.print()}
+            >
+              <Printer size={12} />
+              Print Weekly Checklist
+            </button>
           </div>
 
           <div className="timeline-list">
-            {allTimelines.length === 0 ? (
+            {displayedTimelines.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                 <CheckCircle size={40} style={{ color: "var(--accent-emerald)", marginBottom: "12px" }} />
                 <p style={{ fontWeight: "600" }}>All clear! No upcoming timelines or overdue reports.</p>
               </div>
             ) : (
-              allTimelines.map((timeline, idx) => (
+              displayedTimelines.map((timeline, idx) => (
                 <div key={idx} className={`timeline-card ${timeline.status}`}>
                   <div className="timeline-content">
                     <div className="timeline-student-info">
-                      <span className="timeline-student-name">{timeline.studentName}</span>
+                      <span 
+                        className="timeline-student-name"
+                        onClick={() => handleTimelineClick(timeline)}
+                        title="Go to student workflow"
+                        style={{ 
+                          cursor: "pointer", 
+                          textDecoration: "underline", 
+                          color: "var(--accent-purple)",
+                          fontWeight: "600"
+                        }}
+                      >
+                        {timeline.studentName}
+                      </span>
                       <span className={`timeline-date-alert ${timeline.status}`}>
                         {timeline.daysRemaining === null ? (
                           "Pending Trigger"
@@ -408,7 +554,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
-                      <span className={`timeline-badge ${timeline.status}`}>{timeline.type}</span>
+                      <span className={`timeline-badge ${timeline.status}`}>{timeline.category}</span>
                       <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-heading)" }}>
                         {timeline.label}
                       </span>

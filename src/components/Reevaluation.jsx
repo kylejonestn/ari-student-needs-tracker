@@ -67,6 +67,21 @@ export default function Reevaluation({ students, updateStudent }) {
     }
   }, [students, selectedStudentId]);
 
+  // Sync with global store selection changes (e.g. clicked on dashboard link)
+  useEffect(() => {
+    const checkGlobalSelection = () => {
+      const globalStudentId = store.getState().selectedReevalStudentId;
+      if (globalStudentId) {
+        setSelectedStudentId(globalStudentId);
+        // Clear deep-link keys to avoid locked focus states
+        store.updateState({ selectedReevalStudentId: null });
+      }
+    };
+    
+    checkGlobalSelection();
+    return store.subscribe(checkGlobalSelection);
+  }, []);
+
   // Observation Timer Effect
   useEffect(() => {
     let interval = null;

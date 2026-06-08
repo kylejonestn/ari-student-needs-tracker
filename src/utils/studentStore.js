@@ -667,7 +667,16 @@ class StudentStore {
       // UI State
       activeTab: "dashboard",
       isParentMode: false,
-      flashingGreen: false
+      flashingGreen: false,
+
+      // Deep linking states
+      selectedScreeningId: null,
+      selectedScreeningStepIndex: null,
+      selectedIepStudentId: null,
+      selectedIepStepIndex: null,
+      selectedReevalStudentId: null,
+      selectedProgressStudentId: null,
+      selectedProgressQuarter: null
     };
 
     // Apply theme

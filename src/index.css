@@ -261,6 +261,24 @@ button, input, select, textarea {
   color: var(--accent-rose);
 }
 
+.sync-hud.disconnected svg {
+  transform-origin: center;
+  animation: wiggle-hud 0.6s ease-in-out;
+  animation-delay: 2s;
+}
+
+@keyframes wiggle-hud {
+  0% { transform: rotate(0deg); }
+  15% { transform: rotate(-15deg); }
+  30% { transform: rotate(15deg); }
+  45% { transform: rotate(-10deg); }
+  60% { transform: rotate(10deg); }
+  75% { transform: rotate(-5deg); }
+  90% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+
 .sync-hud.synced {
   border-color: var(--accent-emerald-light);
   color: var(--accent-emerald);
@@ -809,6 +827,12 @@ button, input, select, textarea {
   .stats-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1177,6 +1201,42 @@ button, input, select, textarea {
 .friday-student-item:hover {
   border-color: var(--accent-purple);
   box-shadow: 0 4px 6px rgba(168, 85, 247, 0.1);
+}
+
+/* Responsive Timeline Header & Action buttons styling */
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.timeline-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+}
+
+@media (max-width: 500px) {
+  .timeline-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .timeline-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .timeline-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 

@@ -66,8 +66,18 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   useEffect(() => {
     const checkGlobalSelection = () => {
       const globalId = store.getState().selectedScreeningId;
-      if (globalId && globalId !== selectedScreenId) {
+      const globalStep = store.getState().selectedScreeningStepIndex;
+      if (globalId) {
         setSelectedScreenId(globalId);
+        setExpandedStudentId(globalId);
+        if (globalStep !== undefined && globalStep !== null) {
+          setSelectedStepIndexByStudent(prev => ({
+            ...prev,
+            [globalId]: globalStep
+          }));
+        }
+        // Reset global store selection to prevent locking focus
+        store.updateState({ selectedScreeningId: null, selectedScreeningStepIndex: null });
       }
     };
     

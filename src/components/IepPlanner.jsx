@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { addSchoolDays, getDaysRemaining } from "../utils/studentStore";
+import { store, addSchoolDays, getDaysRemaining } from "../utils/studentStore";
 import { 
   Calendar, 
   Check, 
@@ -60,6 +60,28 @@ const getIepStageIndex = (student) => {
 export default function IepPlanner({ students = [], updateStudent }) {
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   const [selectedStepIndexByStudent, setSelectedStepIndexByStudent] = useState({});
+
+  // Sync with global store selection changes (e.g. clicked on dashboard link)
+  React.useEffect(() => {
+    const checkGlobalSelection = () => {
+      const globalStudentId = store.getState().selectedIepStudentId;
+      const globalStepIndex = store.getState().selectedIepStepIndex;
+      if (globalStudentId) {
+        setExpandedStudentId(globalStudentId);
+        if (globalStepIndex !== undefined && globalStepIndex !== null) {
+          setSelectedStepIndexByStudent(prev => ({
+            ...prev,
+            [globalStudentId]: globalStepIndex
+          }));
+        }
+        // Clear deep-link keys to avoid locked focus states
+        store.updateState({ selectedIepStudentId: null, selectedIepStepIndex: null });
+      }
+    };
+    
+    checkGlobalSelection();
+    return store.subscribe(checkGlobalSelection);
+  }, []);
 
   const activeStudents = students.filter(s => s.status === "Active");
 

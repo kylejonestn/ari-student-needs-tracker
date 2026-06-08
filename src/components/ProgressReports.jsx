@@ -3,11 +3,31 @@
    ========================================== */
 
 import React, { useState } from "react";
+import { store } from "../utils/studentStore";
 import { FileText, Save, CheckCircle, Download, FileSpreadsheet } from "lucide-react";
 
 export default function ProgressReports({ students, saveProgressReport }) {
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || "");
   const [quarter, setQuarter] = useState("Q4"); // Default current quarter (May 2026 is Q4!)
+
+  // Sync with global store selection changes (e.g. clicked on dashboard link)
+  React.useEffect(() => {
+    const checkGlobalSelection = () => {
+      const globalStudentId = store.getState().selectedProgressStudentId;
+      const globalQuarter = store.getState().selectedProgressQuarter;
+      if (globalStudentId) {
+        setSelectedStudentId(globalStudentId);
+        if (globalQuarter) {
+          setQuarter(globalQuarter);
+        }
+        // Clear deep-link keys to avoid locked focus states
+        store.updateState({ selectedProgressStudentId: null, selectedProgressQuarter: null });
+      }
+    };
+    
+    checkGlobalSelection();
+    return store.subscribe(checkGlobalSelection);
+  }, []);
   
   // Goals report state
   const [goals, setGoals] = useState([

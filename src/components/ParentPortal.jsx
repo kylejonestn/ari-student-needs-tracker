@@ -4,13 +4,10 @@
 
 import React, { useState } from "react";
 import { store } from "../utils/studentStore";
-import { Lock, FileSignature, CheckCircle, ExternalLink, Calendar, ShieldCheck, Printer } from "lucide-react";
+import { Lock, FileSignature, CheckCircle, ExternalLink, Calendar, ShieldCheck, Printer, Mail } from "lucide-react";
 
 export default function ParentPortal({ students, updateStudent }) {
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || "");
-  const [parentName, setParentName] = useState("");
-  const [consentChecked, setConsentChecked] = useState(false);
-  const [signatureSaved, setSignatureSaved] = useState(false);
 
   const activeStudent = students.find(s => s.id === selectedStudentId);
 
@@ -39,23 +36,46 @@ export default function ParentPortal({ students, updateStudent }) {
 
   const parentData = getSanitizedParentData(activeStudent);
 
-  const handleSignConsent = (e) => {
-    e.preventDefault();
-    if (!parentName || !consentChecked) {
-      alert("Please fill in your name and check the consent box.");
-      return;
-    }
+  const handleEmailToSelf = () => {
+    if (!parentData) return;
+    
+    const subject = encodeURIComponent(`IEP Progress Report Summary for ${parentData.name}`);
+    
+    const accommodationsList = parentData.accommodations.length > 0
+      ? parentData.accommodations.map(a => `- ${a}`).join("\n")
+      : "No accommodations logged.";
+      
+    const reportsList = parentData.progressReports.length > 0
+      ? parentData.progressReports.map(report => {
+          const goalsText = report.goals 
+            ? report.goals.map(g => `  * ${g.title}: ${g.progress}`).join("\n")
+            : "  No goals listed.";
+          return `[${report.quarter} Academic Term (Released: ${report.date})]\n${goalsText}\n  Narrative: ${report.generalComment || 'N/A'}`;
+        }).join("\n\n")
+      : "No progress reports recorded.";
+      
+    const bodyText = `Aegis Gifted Education Portal - Student IEP Report
 
-    // Save signature directly into student store
-    const signature = {
-      signer: parentName,
-      date: new Date().toLocaleDateString(),
-      verified: true
-    };
+Student: ${parentData.name}
+Grade: ${parentData.grade}
+School: Blackman Middle School
+Classroom Teacher: ${parentData.classroomTeacher}
 
-    updateStudent(activeStudent.id, { parentSignature: signature });
-    setSignatureSaved(true);
-    setTimeout(() => setSignatureSaved(false), 3000);
+--- UPCOMING IEP TIMELINES ---
+Annual IEP Review Due: ${parentData.iepReviewDate}
+Triennial Re-evaluation Due: ${parentData.reevalDueDate}
+
+--- CLASSROOM GIFTED ACCOMMODATIONS ---
+${accommodationsList}
+
+--- IEP GOALS & PROGRESS ---
+${reportsList}
+
+---
+Sent from Aegis Student Needs Tracker.`;
+
+    const body = encodeURIComponent(bodyText);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -82,8 +102,6 @@ export default function ParentPortal({ students, updateStudent }) {
               value={selectedStudentId} 
               onChange={(e) => {
                 setSelectedStudentId(e.target.value);
-                setParentName("");
-                setConsentChecked(false);
               }}
             >
               {students.map(s => (
@@ -91,27 +109,6 @@ export default function ParentPortal({ students, updateStudent }) {
               ))}
             </select>
           </div>
-          
-          <button 
-            type="button"
-            className="btn btn-secondary hide-print" 
-            onClick={() => window.print()}
-            style={{ 
-              padding: "4px 10px", 
-              fontSize: "11px", 
-              backgroundColor: "rgba(192, 132, 252, 0.2)", 
-              color: "#c084fc", 
-              border: "1px solid rgba(192, 132, 252, 0.4)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              height: "22px",
-              borderRadius: "4px"
-            }}
-          >
-            <Printer size={12} />
-            Print Report
-          </button>
         </div>
       </div>
 
@@ -128,6 +125,43 @@ export default function ParentPortal({ students, updateStudent }) {
                 <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>Rutherford County Schools Special Education Service Feed</p>
               </div>
               <ShieldCheck size={40} color="var(--accent-purple)" />
+            </div>
+
+            {/* Action buttons */}
+            <div className="hide-print" style={{ display: "flex", gap: "12px", borderBottom: "1px solid var(--border-color)", paddingBottom: "16px" }}>
+              <button 
+                type="button"
+                className="btn btn-secondary" 
+                onClick={() => window.print()}
+                style={{ 
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 16px",
+                  fontSize: "13px",
+                  borderRadius: "6px"
+                }}
+              >
+                <Printer size={16} />
+                Print Report
+              </button>
+              
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                onClick={handleEmailToSelf}
+                style={{ 
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 16px",
+                  fontSize: "13px",
+                  borderRadius: "6px"
+                }}
+              >
+                <Mail size={16} />
+                Email Report to Self
+              </button>
             </div>
 
             {/* Profile Overview */}
@@ -236,101 +270,33 @@ export default function ParentPortal({ students, updateStudent }) {
               </div>
             </div>
 
-            {/* IEP Digital Signature Form */}
-            <div className="glass-panel">
-              <h3 style={{ fontSize: "16px", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <FileSignature size={18} color="var(--accent-purple)" />
-                IEP Signature Portal
-              </h3>
-              
-              {parentData.parentSignature ? (
-                <div style={{ 
-                  padding: "16px", 
-                  borderRadius: "8px", 
-                  backgroundColor: "var(--accent-emerald-light)", 
-                  border: "1px solid var(--accent-emerald)",
-                  textAlign: "center"
-                }}>
-                  <CheckCircle size={32} color="var(--accent-emerald)" style={{ margin: "0 auto 8px" }} />
-                  <p style={{ fontWeight: "700", color: "var(--accent-emerald)", fontSize: "14px" }}>Digital Signature Confirmed</p>
-                  <p style={{ fontSize: "12px", color: "var(--text-main)", marginTop: "4px" }}>
-                    Signed by: {parentData.parentSignature.signer}
-                  </p>
-                  <p style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Date Signed: {parentData.parentSignature.date}
-                  </p>
-                </div>
-              ) : (
-                <form onSubmit={handleSignConsent} className="hide-print">
-                  <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                    Please review your child's progress goals above and submit digital signature to confirm receipt.
-                  </p>
-
-                  <div className="form-group">
-                    <label>Parent/Guardian Full Name</label>
-                    <input 
-                      type="text" 
-                      className="input-field" 
-                      placeholder="Type your full signature name"
-                      value={parentName}
-                      onChange={(e) => setParentName(e.target.value)}
-                    />
-                  </div>
-
-                  <div style={{ display: "flex", gap: "8px", alignItems: "flex-start", marginBottom: "16px" }}>
-                    <input 
-                      type="checkbox" 
-                      id="parent-consent-check" 
-                      style={{ marginTop: "4px" }}
-                      checked={consentChecked}
-                      onChange={(e) => setConsentChecked(e.target.checked)}
-                    />
-                    <label htmlFor="parent-consent-check" style={{ fontSize: "11px", color: "var(--text-main)", fontWeight: "500" }}>
-                      I acknowledge receipt of this quarterly progress report update and agree to the current IEP goals.
-                    </label>
-                  </div>
-
-                  {signatureSaved && (
-                    <span style={{ display: "block", color: "var(--accent-emerald)", fontSize: "12px", fontWeight: "600", marginBottom: "8px", textAlign: "center" }}>
-                      ✔ Signature synced to Google Drive successfully!
-                    </span>
-                  )}
-
-                  <button type="submit" className="btn btn-primary" style={{ width: "100%", padding: "10px" }}>
-                    Submit Digital Signature
-                  </button>
-                </form>
-              )}
-            </div>
           </div>
         </div>
 
         {/* Physical Signature Block for Paper/PDF Reports */}
-        {!parentData.parentSignature && (
-          <div className="print-only" style={{ marginTop: "40px", paddingTop: "24px", borderTop: "2px solid var(--border-color)" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "16px", color: "var(--text-heading)" }}>Signatures & Receipt Confirmation</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px" }}>
-              <div>
-                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Parent/Guardian Signature</span>
-              </div>
-              <div>
-                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
-              </div>
+        <div className="print-only" style={{ marginTop: "40px", paddingTop: "24px", borderTop: "2px solid var(--border-color)" }}>
+          <h3 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "16px", color: "var(--text-heading)" }}>Signatures & Receipt Confirmation</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px" }}>
+            <div>
+              <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Parent/Guardian Signature</span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "24px" }}>
-              <div>
-                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Ariel, BMS Gifted Facilitator Signature</span>
-              </div>
-              <div>
-                <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
-                <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
-              </div>
+            <div>
+              <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
             </div>
           </div>
-        )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "48px", marginTop: "24px" }}>
+            <div>
+              <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Ariel, BMS Gifted Facilitator Signature</span>
+            </div>
+            <div>
+              <div style={{ borderBottom: "1px solid var(--text-main)", height: "36px", marginBottom: "6px" }}></div>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>Date</span>
+            </div>
+          </div>
+        </div>
         </>
       ) : (
         <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }} className="glass-panel">
