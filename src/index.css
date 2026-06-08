@@ -1004,7 +1004,7 @@ button, input, select, textarea {
 
 .pizza-tracker-container {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   position: relative;
   min-width: 650px;
@@ -1018,7 +1018,7 @@ button, input, select, textarea {
   right: 32px;
   height: 4px;
   background-color: var(--border-color);
-  transform: translateY(-50%);
+  transform: none;
   z-index: 1;
 }
 
@@ -1028,7 +1028,7 @@ button, input, select, textarea {
   left: 32px;
   height: 4px;
   background-color: var(--accent-purple);
-  transform: translateY(-50%);
+  transform: none;
   z-index: 2;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
