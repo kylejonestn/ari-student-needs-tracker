@@ -236,6 +236,7 @@ export default function App() {
                   syncFromGoogleDrive={() => store.syncFromGoogleDrive()}
                   accessToken={accessToken}
                   tokenExpiry={tokenExpiry}
+                  holidays={storeState.holidays}
                 />
               )}
             </>

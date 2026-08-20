@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { store, addDays, addSchoolDays, getDaysRemaining } from "../utils/studentStore";
+import { store, addDays, addSchoolDays, getDaysRemaining, DEFAULT_DEADLINES } from "../utils/studentStore";
 import { 
   Calendar, 
   Check, 
@@ -107,25 +107,26 @@ export default function IepPlanner({ students = [], updateStudent }) {
 
   const getStageDueDate = (student, idx, raw = false) => {
     const meetingDate = student.iepMeetingDate;
+    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
     let val = "";
     switch (idx) {
       case 0:
         val = "2026-08-15";
         break;
       case 1:
-        val = meetingDate ? addDays(meetingDate, -25) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -deadlines.iepParentProposal) : "TBD";
         break;
       case 2:
-        val = meetingDate ? addDays(meetingDate, -20) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -deadlines.iepFormalInvitation) : "TBD";
         break;
       case 3:
-        val = meetingDate ? addDays(meetingDate, -15) : "TBD";
+        val = meetingDate ? addDays(meetingDate, -deadlines.iepTeacherChecklist) : "TBD";
         break;
       case 4:
-        val = meetingDate ? addSchoolDays(meetingDate, -7) : "TBD";
+        val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDataGathering) : "TBD";
         break;
       case 5:
-        val = meetingDate ? addSchoolDays(meetingDate, -4) : "TBD";
+        val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDraftWritten) : "TBD";
         break;
       case 6:
         val = meetingDate || "TBD";
@@ -150,67 +151,68 @@ export default function IepPlanner({ students = [], updateStudent }) {
     const warnings = [];
     const meetingDate = student.iepMeetingDate;
     if (!meetingDate) return warnings;
+    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
 
-    // 10-day notice compliance warning
+    // Notice compliance warning
     if (student.iepInvitationSentDate && !student.meetingNoticeWaived) {
       const noticeDays = getCalendarDaysDiff(student.iepInvitationSentDate, meetingDate);
-      if (noticeDays !== null && noticeDays < 10) {
+      if (noticeDays !== null && noticeDays < deadlines.iepFormalInvitation) {
         warnings.push({
           type: "notice",
           label: "Invitation Notice Warning",
-          text: `Invitation sent on ${student.iepInvitationSentDate} is only ${noticeDays} calendar days prior to the meeting (10 days legally required).`,
+          text: `Invitation sent on ${student.iepInvitationSentDate} is only ${noticeDays} calendar days prior to the meeting (target: ${deadlines.iepFormalInvitation} days).`,
           status: "warning"
         });
       }
     }
 
-    // 7 school days prior data gathering reminder
+    // Data gathering reminder
     if (!student.iepDataMiningCompleted) {
-      const dataDue = addSchoolDays(meetingDate, -7);
+      const dataDue = addSchoolDays(meetingDate, -deadlines.iepDataGathering);
       if (getDaysRemaining(dataDue) <= 0) {
         warnings.push({
           type: "data",
           label: "Data Mining Reminder",
-          text: `Academic scores (TVAAS, Mastery Connect, EasyCBM, Savvas) should be pulled (7 school days prior reminder; target: ${dataDue}).`,
+          text: `Academic scores (TVAAS, Mastery Connect, EasyCBM, Savvas) should be pulled (${deadlines.iepDataGathering} school days prior reminder; target: ${dataDue}).`,
           status: "warning"
         });
       }
     }
 
-    // 6 school days prior transition survey reminder
+    // Transition survey reminder
     if (!student.iepTransitionSurveyCompleted) {
-      const surveyDue = addSchoolDays(meetingDate, -6);
+      const surveyDue = addSchoolDays(meetingDate, -deadlines.iepTransitionSurvey);
       if (getDaysRemaining(surveyDue) <= 0) {
         warnings.push({
           type: "transition",
           label: "Transition Survey Reminder",
-          text: `Student Transition Survey is past due (6 school days prior reminder; target: ${surveyDue}).`,
+          text: `Student Transition Survey is past due (${deadlines.iepTransitionSurvey} school days prior reminder; target: ${surveyDue}).`,
           status: "warning"
         });
       }
     }
 
-    // 4 school days prior draft document writing reminder
+    // Draft document writing reminder
     if (!student.iepDraftWrittenDate) {
-      const draftDue = addSchoolDays(meetingDate, -4);
+      const draftDue = addSchoolDays(meetingDate, -deadlines.iepDraftWritten);
       if (getDaysRemaining(draftDue) <= 0) {
         warnings.push({
           type: "draft",
           label: "IEP Draft Due",
-          text: `IEP Draft on TN Pulse should be completed (4 school days prior reminder; target: ${draftDue}).`,
+          text: `IEP Draft on TN Pulse should be completed (${deadlines.iepDraftWritten} school days prior reminder; target: ${draftDue}).`,
           status: "warning"
         });
       }
     }
 
-    // 2 school days prior draft sending reminder
+    // Draft sending reminder
     if (!student.iepDraftSentDate) {
-      const sendDue = addSchoolDays(meetingDate, -2);
+      const sendDue = addSchoolDays(meetingDate, -deadlines.iepDraftSent);
       if (getDaysRemaining(sendDue) <= 0) {
         warnings.push({
           type: "sendDraft",
           label: "Draft Delivery Due",
-          text: `Draft IEP & Zoom link must be sent to parent (48 school hours prior reminder; target: ${sendDue}).`,
+          text: `Draft IEP & Zoom link must be sent to parent (${deadlines.iepDraftSent} school days / 48 hours prior reminder; target: ${sendDue}).`,
           status: "warning"
         });
       }
@@ -779,6 +781,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                     const isCompleted = idx < currentStageIndex;
                     const isActive = idx === currentStageIndex;
                     
+                    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
                     // Compute step warning status for dots
                     let isWarning = false;
                     if (student.iepMeetingDate) {
@@ -786,20 +789,20 @@ export default function IepPlanner({ students = [], updateStudent }) {
                         // invitation sent notice check
                         if (student.iepInvitationSentDate && !student.meetingNoticeWaived) {
                           const noticeDays = getCalendarDaysDiff(student.iepInvitationSentDate, student.iepMeetingDate);
-                          if (noticeDays !== null && noticeDays < 10) isWarning = true;
+                          if (noticeDays !== null && noticeDays < deadlines.iepFormalInvitation) isWarning = true;
                         }
                       } else if (idx === 4) {
                         // data gathering warnings
-                        const dataDue = addSchoolDays(student.iepMeetingDate, -7);
-                        const surveyDue = addSchoolDays(student.iepMeetingDate, -6);
+                        const dataDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDataGathering);
+                        const surveyDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepTransitionSurvey);
                         if ((!student.iepDataMiningCompleted && getDaysRemaining(dataDue) <= 0) || 
                             (!student.iepTransitionSurveyCompleted && getDaysRemaining(surveyDue) <= 0)) {
                           isWarning = true;
                         }
                       } else if (idx === 5) {
                         // drafting warnings
-                        const draftDue = addSchoolDays(student.iepMeetingDate, -4);
-                        const sendDue = addSchoolDays(student.iepMeetingDate, -2);
+                        const draftDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftWritten);
+                        const sendDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftSent);
                         if ((!student.iepDraftWrittenDate && getDaysRemaining(draftDue) <= 0) || 
                             (!student.iepDraftSentDate && getDaysRemaining(sendDue) <= 0)) {
                           isWarning = true;

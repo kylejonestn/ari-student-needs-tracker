@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState, useEffect } from "react";
-import { store, addDays, getDaysRemaining, guessTeacherEmail } from "../utils/studentStore";
+import { store, addDays, getDaysRemaining, guessTeacherEmail, DEFAULT_DEADLINES } from "../utils/studentStore";
 import { 
   ClipboardCheck, 
   Calendar, 
@@ -26,6 +26,8 @@ export default function Reevaluation({ students, updateStudent }) {
   const [obsNoteText, setObsNoteText] = useState("");
   const [showLogSuccess, setShowLogSuccess] = useState(false);
 
+  const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
+
   // Meeting date day checks (Psychologist available Monday/Thursday only)
   const isMeetingDayWarning = (dateStr) => {
     if (!dateStr) return false;
@@ -43,7 +45,7 @@ export default function Reevaluation({ students, updateStudent }) {
       `Hi ${activeStudent.classroomTeacher || "Teacher"},\n\n` +
       `As part of the mandatory 3-year triennial re-evaluation process for ${activeStudent.name}, ` +
       `could you please complete the characteristics/behavior checklist as soon as possible?\n\n` +
-      `We need this compiled at least 10 days before our upcoming meeting scheduled on ${activeStudent.reevalMeetingDate || "[Date TBD]"}.\n\n` +
+      `We need this compiled at least ${deadlines.reevalPsychHandoff} days before our upcoming meeting scheduled on ${activeStudent.reevalMeetingDate || "[Date TBD]"}.\n\n` +
       `Please let me know if you have any questions or need a print copy of the survey.\n\n` +
       `Thank you,\n` +
       `Ariel`
@@ -342,8 +344,8 @@ export default function Reevaluation({ students, updateStudent }) {
                 <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>psychologist Compilation & Handoff</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <p style={{ fontSize: "12px", color: "var(--text-main)" }}>
-                    All observations and surveys must be submitted to the School Psychologist at least <strong>10 days before the meeting</strong>.
-                    Handoff deadline: <strong>{addDays(activeStudent.reevalMeetingDate, -10)}</strong>.
+                    All observations and surveys must be submitted to the School Psychologist at least <strong>{deadlines.reevalPsychHandoff} days before the meeting</strong>.
+                    Handoff deadline: <strong>{addDays(activeStudent.reevalMeetingDate, -deadlines.reevalPsychHandoff)}</strong>.
                   </p>
                   <div className="form-group">
                     <label>Handoff Completed Date</label>

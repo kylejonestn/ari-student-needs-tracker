@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState, useEffect } from "react";
-import { store, addDays, getDaysRemaining, addSchoolDays, guessTeacherEmail } from "../utils/studentStore";
+import { store, addDays, getDaysRemaining, addSchoolDays, guessTeacherEmail, DEFAULT_DEADLINES } from "../utils/studentStore";
 import { 
   Check, 
   ClipboardList, 
@@ -284,6 +284,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const renderStepContent = (student, stepIndex) => {
     if (!student) return null;
     const { cognitionPts, performancePts, creativityPts, screeningScore, totalPoints } = getStudentScores(student);
+    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
 
     const isMeetingDayWarningCheck = (dateStr) => {
       if (!dateStr) return false;
@@ -384,15 +385,15 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
             <div style={{ padding: "12px", borderRadius: "8px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)", fontSize: "12px", display: "flex", justifyContent: "space-between" }}>
               <span>Consent Date: <strong>{student.consentReceivedDate}</strong></span>
               <span style={{ color: "var(--accent-rose)", fontWeight: "700" }}>
-                60-Day Deadline: {addDays(student.consentReceivedDate, 60)} ({getDaysRemaining(addDays(student.consentReceivedDate, 60))} days remaining)
+                60-Day Deadline: {addDays(student.consentReceivedDate, deadlines.screeningEvaluation)} ({getDaysRemaining(addDays(student.consentReceivedDate, deadlines.screeningEvaluation))} days remaining)
               </span>
             </div>
 
             <div style={{ border: "1px solid var(--border-color)", padding: "16px", borderRadius: "8px" }}>
               <h4 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Classroom Teacher Input Checklist</h4>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "12px" }}>
-                General education checklist (SIGS/Renzulli behavior rating) is due in <strong>2 school weeks</strong> (10 school days) from consent.
-                Checklist deadline: <strong>{addSchoolDays(student.consentReceivedDate, 10)}</strong>.
+                General education checklist (SIGS/Renzulli behavior rating) is due in <strong>{deadlines.screeningTeacherChecklist} school days</strong> from consent.
+                Checklist deadline: <strong>{addSchoolDays(student.consentReceivedDate, deadlines.screeningTeacherChecklist)}</strong>.
               </p>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                 <label style={{ display: "inline-flex", gap: "8px", alignItems: "center", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}>
@@ -639,7 +640,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
             <div style={{ padding: "12px", borderRadius: "8px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)", fontSize: "12px", display: "flex", justifyContent: "space-between" }}>
               <span>Baton Pass Date: <strong>{student.permissionToTestReceivedDate}</strong></span>
               <span style={{ color: "var(--accent-rose)", fontWeight: "700" }}>
-                psychologist 60-Day Deadline: {addDays(student.permissionToTestReceivedDate, 60)} ({getDaysRemaining(addDays(student.permissionToTestReceivedDate, 60))} days remaining)
+                psychologist 60-Day Deadline: {addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychEvaluation)} ({getDaysRemaining(addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychEvaluation))} days remaining)
               </span>
             </div>
 
@@ -954,28 +955,29 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
           {screenings.map(student => {
             const isExpanded = expandedStudentId === student.id;
             const currentStageIndex = phases.indexOf(student.status);
+            const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
             
             const getStageDueDate = (idx, raw = false) => {
               const refDate = student.referralDate || new Date().toISOString().split("T")[0];
               let val = "";
               switch (idx) {
                 case 0:
-                  val = addSchoolDays(refDate, 5);
+                  val = addSchoolDays(refDate, deadlines.screeningQuickSurvey);
                   break;
                 case 1:
-                  val = addDays(refDate, 10);
+                  val = addDays(refDate, deadlines.screeningConsentPending);
                   break;
                 case 2:
-                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 60) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, deadlines.screeningEvaluation) : "TBD";
                   break;
                 case 3:
-                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 65) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, deadlines.screeningEvaluation + deadlines.screeningInformedConsent) : "TBD";
                   break;
                 case 4:
-                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, 75) : "TBD";
+                  val = student.consentReceivedDate ? addDays(student.consentReceivedDate, deadlines.screeningEvaluation + deadlines.screeningInformedConsent + deadlines.screeningPermissionToTest) : "TBD";
                   break;
                 case 5:
-                  val = student.permissionToTestReceivedDate ? addDays(student.permissionToTestReceivedDate, 60) : "TBD";
+                  val = student.permissionToTestReceivedDate ? addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychEvaluation) : "TBD";
                   break;
                 case 6:
                   val = student.meetingDate || "TBD";
@@ -1091,11 +1093,11 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                         let isWarning = false;
                         if (isActive) {
                           if (student.status === "Evaluation in Progress" && student.consentReceivedDate) {
-                            const daysLeft = getDaysRemaining(addDays(student.consentReceivedDate, 60));
-                            const teacherDaysLeft = student.teacherChecklistSigned ? 99 : getDaysRemaining(addSchoolDays(student.consentReceivedDate, 10));
+                            const daysLeft = getDaysRemaining(addDays(student.consentReceivedDate, deadlines.screeningEvaluation));
+                            const teacherDaysLeft = student.teacherChecklistSigned ? 99 : getDaysRemaining(addSchoolDays(student.consentReceivedDate, deadlines.screeningTeacherChecklist));
                             if (daysLeft <= 15 || teacherDaysLeft <= 0) isWarning = true;
                           } else if (student.status === "Psych Results Pending" && student.permissionToTestReceivedDate) {
-                            const daysLeft = getDaysRemaining(addDays(student.permissionToTestReceivedDate, 60));
+                            const daysLeft = getDaysRemaining(addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychEvaluation));
                             if (daysLeft <= 10) isWarning = true;
                           } else if (student.status === "Meeting Scheduled" && student.meetingDate) {
                             const isMeetingDayWarningCheck = (() => {

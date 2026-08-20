@@ -146,7 +146,7 @@ export default function Students({
 
   const handleBuildPreview = () => {
     // Verify required mappings are present
-    const required = ["name", "grade", "classroomTeacher", "iepReviewDate", "reevalDueDate"];
+    const required = ["name"];
     const missing = required.filter(f => !columnMapping[f]);
     if (missing.length > 0) {
       alert(`Please map all required columns before proceeding: ${missing.map(m => m.toUpperCase()).join(", ")}`);
@@ -169,9 +169,9 @@ export default function Students({
       const reevalDate = getVal("reevalDueDate");
       const accomsRaw = getVal("accommodations");
 
-      // Validate date formats (simple YYYY-MM-DD check)
+      // Validate date formats (simple YYYY-MM-DD check, empty or TBD is valid)
       const isValidDate = (dStr) => {
-        if (!dStr) return false;
+        if (!dStr || dStr.trim() === "" || dStr.trim() === "TBD") return true;
         return /^\d{4}-\d{2}-\d{2}$/.test(dStr.trim());
       };
 
@@ -182,17 +182,17 @@ export default function Students({
 
       return {
         name,
-        grade,
+        grade: grade || "",
         school: "Blackman Middle School",
-        classroomTeacher: teacher,
-        iepReviewDate: iepDate,
-        reevalDueDate: reevalDate,
+        classroomTeacher: teacher || "",
+        iepReviewDate: iepDate || "",
+        reevalDueDate: reevalDate || "",
         accommodations,
-        isValid: name && grade && teacher && isValidDate(iepDate) && isValidDate(reevalDate),
+        isValid: !!name && isValidDate(iepDate) && isValidDate(reevalDate),
         validationErrors: {
           name: !name,
-          grade: !grade,
-          classroomTeacher: !teacher,
+          grade: false,
+          classroomTeacher: false,
           iepReviewDate: !isValidDate(iepDate),
           reevalDueDate: !isValidDate(reevalDate)
         }
@@ -249,8 +249,8 @@ export default function Students({
 
   const handleAddStudent = (e) => {
     e.preventDefault();
-    if (!newName || !newTeacher || !newIepDate || !newReevalDate) {
-      alert("Please fill in all required fields.");
+    if (!newName) {
+      alert("Please enter the student's name.");
       return;
     }
 
@@ -262,6 +262,7 @@ export default function Students({
       name: newName,
       grade: newGrade,
       school: "Blackman Middle School",
+      classroomTeacher: newTeacher,
       iepReviewDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
@@ -360,7 +361,7 @@ export default function Students({
             </div>
 
             <div className="form-group" style={{ marginBottom: "16px" }}>
-              <label>Classroom Core Teacher *</label>
+              <label>Classroom Core Teacher</label>
               <input
                 type="text"
                 className="input-field"
@@ -386,7 +387,7 @@ export default function Students({
 
             <div className="form-row">
               <div className="form-group">
-                <label>Annual IEP Review Date *</label>
+                <label>Annual IEP Review Date</label>
                 <input
                   type="date"
                   className="input-field"
@@ -395,7 +396,7 @@ export default function Students({
                 />
               </div>
               <div className="form-group">
-                <label>Triennial Re-evaluation Date *</label>
+                <label>Triennial Re-evaluation Date</label>
                 <input
                   type="date"
                   className="input-field"
@@ -833,8 +834,34 @@ export default function Students({
                       }}
                     />
                   </div>
-                  <div><label style={{ color: "var(--text-muted)" }}>Annual IEP Due:</label> <p style={{ fontWeight: "600", color: "var(--accent-amber)", marginTop: "6px" }}>{selectedStudent.iepReviewDate}</p></div>
-                  <div><label style={{ color: "var(--text-muted)" }}>Triennial Re-eval Due:</label> <p style={{ fontWeight: "600", marginTop: "6px" }}>{selectedStudent.reevalDueDate}</p></div>
+                  <div>
+                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Annual IEP Due:</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%", color: "var(--accent-amber)" }}
+                      value={selectedStudent.iepReviewDate || ""}
+                      onChange={(e) => {
+                        const updated = { ...selectedStudent, iepReviewDate: e.target.value };
+                        setSelectedStudent(updated);
+                        updateStudent(selectedStudent.id, { iepReviewDate: e.target.value });
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Triennial Re-eval Due:</label>
+                    <input
+                      type="date"
+                      className="input-field"
+                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%" }}
+                      value={selectedStudent.reevalDueDate || ""}
+                      onChange={(e) => {
+                        const updated = { ...selectedStudent, reevalDueDate: e.target.value };
+                        setSelectedStudent(updated);
+                        updateStudent(selectedStudent.id, { reevalDueDate: e.target.value });
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1143,10 +1170,10 @@ export default function Students({
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   {[
                     { key: "name", label: "Student Full Name", req: true },
-                    { key: "grade", label: "Grade Level", req: true },
-                    { key: "classroomTeacher", label: "Classroom Teacher", req: true },
-                    { key: "iepReviewDate", label: "Annual IEP Review Date", req: true },
-                    { key: "reevalDueDate", label: "Triennial Re-evaluation Date", req: true },
+                    { key: "grade", label: "Grade Level", req: false },
+                    { key: "classroomTeacher", label: "Classroom Teacher", req: false },
+                    { key: "iepReviewDate", label: "Annual IEP Review Date", req: false },
+                    { key: "reevalDueDate", label: "Triennial Re-evaluation Date", req: false },
                     { key: "accommodations", label: "Accommodations List", req: false }
                   ].map((field) => (
                     <div key={field.key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>
@@ -1228,16 +1255,16 @@ export default function Students({
                             {row.name || "(Missing)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.grade ? "700" : "500", color: row.validationErrors.grade ? "var(--accent-rose)" : "inherit" }}>
-                            {row.grade || "(Missing)"}
+                            {row.grade || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.classroomTeacher ? "700" : "500", color: row.validationErrors.classroomTeacher ? "var(--accent-rose)" : "inherit" }}>
-                            {row.classroomTeacher || "(Missing)"}
+                            {row.classroomTeacher || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.iepReviewDate ? "700" : "500", color: row.validationErrors.iepReviewDate ? "var(--accent-rose)" : "inherit" }}>
-                            {row.iepReviewDate || "(Missing)"}
+                            {row.iepReviewDate || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.reevalDueDate ? "700" : "500", color: row.validationErrors.reevalDueDate ? "var(--accent-rose)" : "inherit" }}>
-                            {row.reevalDueDate || "(Missing)"}
+                            {row.reevalDueDate || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", color: "var(--text-muted)" }}>
                             {row.accommodations.join(", ") || "None"}

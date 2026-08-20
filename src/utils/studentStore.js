@@ -9,17 +9,57 @@ import { driveService } from "./driveService";
 export const DEFAULT_CLIENT_ID = "382674408500-il976m1gmjnpafrd7ilqnhtln0copmnp.apps.googleusercontent.com";
 
 // Rutherford County Schools (RCS) 2026-2027 breaks & holidays (students not in session)
-const RCS_HOLIDAYS_AND_BREAKS = [
-  "2026-09-07", // Labor Day
-  "2026-09-18", // Teacher Admin Day
-  "2026-11-03", // Election Day / Admin
-  "2027-01-04", // In-service / Safety Day
-  "2027-01-18", // MLK Holiday
-  "2027-02-15", // Presidents Day
-  "2027-03-11", // Teacher Admin Day
-  "2027-03-26", // Good Friday
-  "2027-05-07", // Teacher Admin Day
-  "2027-05-27"  // Teacher Workday
+export const DEFAULT_HOLIDAYS = [
+  // Single days
+  { date: "2026-09-07", description: "Labor Day" },
+  { date: "2026-09-18", description: "Teacher Admin Day" },
+  { date: "2026-11-03", description: "Election Day / Admin" },
+  { date: "2027-01-04", description: "In-service / Safety Day" },
+  { date: "2027-01-18", description: "MLK Holiday" },
+  { date: "2027-02-15", description: "Presidents Day" },
+  { date: "2027-03-11", description: "Teacher Admin Day" },
+  { date: "2027-03-26", description: "Good Friday" },
+  { date: "2027-05-07", description: "Teacher Admin Day" },
+  { date: "2027-05-27", description: "Teacher Workday" },
+  
+  // Summer transition / August in-service days (Aug 3 to Aug 6, 2026)
+  { date: "2026-08-03", description: "Summer Transition / Aug In-service" },
+  { date: "2026-08-04", description: "Summer Transition / Aug In-service" },
+  { date: "2026-08-05", description: "Summer Transition / Aug In-service" },
+  { date: "2026-08-06", description: "Summer Transition / Aug In-service" },
+  
+  // Fall Break: Oct 5 - Oct 9, 2026
+  { date: "2026-10-05", description: "Fall Break" },
+  { date: "2026-10-06", description: "Fall Break" },
+  { date: "2026-10-07", description: "Fall Break" },
+  { date: "2026-10-08", description: "Fall Break" },
+  { date: "2026-10-09", description: "Fall Break" },
+  
+  // Thanksgiving Break: Nov 23 - Nov 27, 2026
+  { date: "2026-11-23", description: "Thanksgiving Break" },
+  { date: "2026-11-24", description: "Thanksgiving Break" },
+  { date: "2026-11-25", description: "Thanksgiving Break" },
+  { date: "2026-11-26", description: "Thanksgiving Break" },
+  { date: "2026-11-27", description: "Thanksgiving Break" },
+  
+  // Winter Break: Dec 21, 2026 - Jan 1, 2027
+  { date: "2026-12-21", description: "Winter Break" },
+  { date: "2026-12-22", description: "Winter Break" },
+  { date: "2026-12-23", description: "Winter Break" },
+  { date: "2026-12-24", description: "Winter Break" },
+  { date: "2026-12-25", description: "Winter Break" },
+  { date: "2026-12-28", description: "Winter Break" },
+  { date: "2026-12-29", description: "Winter Break" },
+  { date: "2026-12-30", description: "Winter Break" },
+  { date: "2026-12-31", description: "Winter Break" },
+  { date: "2027-01-01", description: "Winter Break" },
+  
+  // Spring Break: Mar 29 - Apr 2, 2027
+  { date: "2027-03-29", description: "Spring Break" },
+  { date: "2027-03-30", description: "Spring Break" },
+  { date: "2027-03-31", description: "Spring Break" },
+  { date: "2027-04-01", description: "Spring Break" },
+  { date: "2027-04-02", description: "Spring Break" }
 ];
 
 // Rutherford County Schools (RCS) default report card dates (end of quarters)
@@ -30,6 +70,37 @@ export const DEFAULT_REPORT_CARD_DATES = [
   { quarter: "Q4", date: "2027-05-28" }
 ];
 
+// Default day buffer configuration for all Aegis timeline calculations
+export const DEFAULT_DEADLINES = {
+  // Screening Timeline Deadlines (Days)
+  screeningQuickSurvey: 5,       // School Days
+  screeningConsentPending: 10,   // Calendar Days
+  screeningEvaluation: 60,       // Calendar Days
+  screeningTeacherChecklist: 10,  // School Days
+  screeningAcademicCheckin: 15,  // Calendar Days
+  screeningCreativityCheckin: 20, // Calendar Days
+  screeningInformedConsent: 5,   // Calendar Days
+  screeningPermissionToTest: 10, // Calendar Days
+  screeningPsychEvaluation: 60,  // Calendar Days
+  screeningPsychCheckin: 20,     // Calendar Days
+  screeningMeetingNotice: 10,     // Calendar Days notice
+  screeningArielMeetingNotice: 20, // Calendar Days notice
+
+  // Re-evaluation Timeline Deadlines (Days)
+  reevalInvitation: 20,          // Calendar Days
+  reevalObservation: 13,         // Calendar Days
+  reevalPsychHandoff: 10,        // Calendar Days
+
+  // IEP Timeline Deadlines (Days)
+  iepParentProposal: 25,         // Calendar Days
+  iepFormalInvitation: 20,       // Calendar Days
+  iepTeacherChecklist: 15,       // Calendar Days
+  iepDataGathering: 7,           // School Days
+  iepTransitionSurvey: 6,        // School Days
+  iepDraftWritten: 4,            // School Days
+  iepDraftSent: 2,               // School Days
+};
+
 // Checks if a date is a valid school day (no weekends, no holidays, no designated breaks)
 export const isSchoolDay = (dateStr) => {
   if (!dateStr) return false;
@@ -39,22 +110,13 @@ export const isSchoolDay = (dateStr) => {
   
   const yyyymmdd = date.toISOString().split("T")[0];
   
-  // Exact match holiday check
-  if (RCS_HOLIDAYS_AND_BREAKS.includes(yyyymmdd)) return false;
+  // Dynamic holiday check
+  let holidays = DEFAULT_HOLIDAYS;
+  if (typeof store !== 'undefined' && store && store.state && store.state.holidays) {
+    holidays = store.state.holidays;
+  }
   
-  // Check range breaks
-  // Summer transition / August in-service days (Aug 3 to Aug 6, 2026)
-  if (yyyymmdd >= "2026-08-03" && yyyymmdd <= "2026-08-06") return false;
-  // Fall Break: Oct 5 - Oct 9, 2026
-  if (yyyymmdd >= "2026-10-05" && yyyymmdd <= "2026-10-09") return false;
-  // Thanksgiving Break: Nov 23 - Nov 27, 2026
-  if (yyyymmdd >= "2026-11-23" && yyyymmdd <= "2026-11-27") return false;
-  // Winter Break: Dec 21, 2026 - Jan 1, 2027
-  if (yyyymmdd >= "2026-12-21" && yyyymmdd <= "2027-01-01") return false;
-  // Spring Break: Mar 29 - Apr 2, 2027
-  if (yyyymmdd >= "2027-03-29" && yyyymmdd <= "2027-04-02") return false;
-  
-  return true;
+  return !holidays.some(h => h.date === yyyymmdd);
 };
 
 // Add school days skipping weekends and RCS holidays (supports negative numbers)
@@ -123,6 +185,7 @@ export const guessTeacherEmail = (name) => {
  */
 export const calculateTimelines = (student, isScreening = false) => {
   const timelines = [];
+  const deadlines = (store && store.state && store.state.deadlines) || DEFAULT_DEADLINES;
   
   if (isScreening) {
     // ------------------------------------------
@@ -131,7 +194,7 @@ export const calculateTimelines = (student, isScreening = false) => {
     
     // Status 1: Quick Survey (Cume File Check)
     if (student.status === "Quick Survey") {
-      const dueDate = addSchoolDays(student.referralDate || new Date().toISOString().split("T")[0], 5);
+      const dueDate = addSchoolDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningQuickSurvey);
       timelines.push({
         type: "Quick Survey",
         label: "Cume File Quick Survey",
@@ -146,7 +209,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 2: Consent Pending
     if (student.status === "Consent Pending") {
-      const dueDate = addDays(student.referralDate || new Date().toISOString().split("T")[0], 10);
+      const dueDate = addDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningConsentPending);
       timelines.push({
         type: "Consent Pending",
         label: "Awaiting Parental Consent",
@@ -161,7 +224,7 @@ export const calculateTimelines = (student, isScreening = false) => {
     // Status 3: Evaluation in Progress
     if (student.status === "Evaluation in Progress" && student.consentReceivedDate) {
       // Ariel's 60-Day Calendar evaluation timeline
-      const target60Day = addDays(student.consentReceivedDate, 60);
+      const target60Day = addDays(student.consentReceivedDate, deadlines.screeningEvaluation);
       const daysLeft60 = getDaysRemaining(target60Day);
       timelines.push({
         type: "60-Day Evaluation",
@@ -175,7 +238,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
       // Teacher behavior checklist due 2 school weeks (10 school days) from consent
       if (!student.teacherChecklistSigned) {
-        const teacherDueDate = addSchoolDays(student.consentReceivedDate, 10);
+        const teacherDueDate = addSchoolDays(student.consentReceivedDate, deadlines.screeningTeacherChecklist);
         const teacherDaysLeft = getDaysRemaining(teacherDueDate);
         timelines.push({
           type: "Teacher Input Checklist",
@@ -191,7 +254,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
       // Academic check-in (T-VAAS or Woodcock-Johnson) due 15 calendar days from consent
       if (!student.matrix?.performance?.score) {
-        const academicDueDate = addDays(student.consentReceivedDate, 15);
+        const academicDueDate = addDays(student.consentReceivedDate, deadlines.screeningAcademicCheckin);
         const academicDays = getDaysRemaining(academicDueDate);
         timelines.push({
           type: "Academic Check-in",
@@ -206,7 +269,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
       // Creativity check-in (TOL / TOL Plus / TN Create / Torrance) due 20 calendar days from consent
       if (!student.matrix?.creativity?.score) {
-        const creativityDueDate = addDays(student.consentReceivedDate, 20);
+        const creativityDueDate = addDays(student.consentReceivedDate, deadlines.screeningCreativityCheckin);
         const creativityDays = getDaysRemaining(creativityDueDate);
         timelines.push({
           type: "Creativity Check-in",
@@ -222,7 +285,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 4: Informed Consent (Phone Call)
     if (student.status === "Informed Consent" && !student.informedConsentCompleted) {
-      const dueDate = addDays(new Date().toISOString().split("T")[0], 5);
+      const dueDate = addDays(new Date().toISOString().split("T")[0], deadlines.screeningInformedConsent);
       timelines.push({
         type: "Informed Consent",
         label: "Informed Consent Call/Email",
@@ -236,7 +299,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 5: Permission to Test Pending
     if (student.status === "Permission to Test Pending" && !student.permissionToTestReceivedDate) {
-      const dueDate = addDays(new Date().toISOString().split("T")[0], 10);
+      const dueDate = addDays(new Date().toISOString().split("T")[0], deadlines.screeningPermissionToTest);
       timelines.push({
         type: "Permission to Test",
         label: "Awaiting Psychologist Consent",
@@ -250,7 +313,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 6: Psych Results Pending (School Psychologist)
     if (student.status === "Psych Results Pending" && student.permissionToTestReceivedDate) {
-      const psych60Day = addDays(student.permissionToTestReceivedDate, 60);
+      const psych60Day = addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychEvaluation);
       const daysLeftPsych = getDaysRemaining(psych60Day);
       timelines.push({
         type: "Psychologist 60-Day Evaluation",
@@ -263,7 +326,7 @@ export const calculateTimelines = (student, isScreening = false) => {
       });
 
       // 20-day check-in reminder
-      const checkinDate = addDays(student.permissionToTestReceivedDate, 20);
+      const checkinDate = addDays(student.permissionToTestReceivedDate, deadlines.screeningPsychCheckin);
       const checkinDays = getDaysRemaining(checkinDate);
       if (checkinDays >= -10 && !student.psychResultsReceived) {
         timelines.push({
@@ -293,8 +356,8 @@ export const calculateTimelines = (student, isScreening = false) => {
 
       // Meeting Invitation buffer check
       if (!student.meetingInvitationSentDate) {
-        const legalInviteDate = addDays(student.meetingDate, -10);
-        const arielInviteDate = addDays(student.meetingDate, -20);
+        const legalInviteDate = addDays(student.meetingDate, -deadlines.screeningMeetingNotice);
+        const arielInviteDate = addDays(student.meetingDate, -deadlines.screeningArielMeetingNotice);
         const legalDays = getDaysRemaining(legalInviteDate);
         
         timelines.push({
@@ -369,7 +432,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 1. Send Invitation (10 days legal notice, 20 days Ariel)
         if (!student.iepInvitationSentDate) {
-          const inviteDue = addDays(mDate, -20);
+          const inviteDue = addDays(mDate, -deadlines.iepFormalInvitation);
           const inviteDays = getDaysRemaining(inviteDue);
           timelines.push({
             type: "IEP Invitation",
@@ -406,7 +469,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 2. Data Mining Checklist (7 days before)
         if (!student.iepDataMiningCompleted) {
-          const mineDue = addDays(mDate, -7);
+          const mineDue = addSchoolDays(mDate, -deadlines.iepDataGathering);
           const mineDays = getDaysRemaining(mineDue);
           timelines.push({
             type: "IEP Data Mining",
@@ -422,7 +485,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 3. Transition Survey (6 days before)
         if (!student.iepTransitionSurveyCompleted) {
-          const transDue = addDays(mDate, -6);
+          const transDue = addSchoolDays(mDate, -deadlines.iepTransitionSurvey);
           timelines.push({
             type: "IEP Transition Survey",
             label: "Student Transition Survey",
@@ -436,7 +499,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 4. Write IEP (4 days before)
         if (!student.iepDraftWrittenDate) {
-          const draftDue = addDays(mDate, -4);
+          const draftDue = addSchoolDays(mDate, -deadlines.iepDraftWritten);
           timelines.push({
             type: "IEP Writing",
             label: "Write IEP Document Draft",
@@ -450,7 +513,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 5. Send IEP Draft to Parent (48 business/school hours before)
         if (!student.iepDraftSentDate) {
-          const sendDue = addSchoolDays(mDate, -2); // 2 school days before
+          const sendDue = addSchoolDays(mDate, -deadlines.iepDraftSent); // 2 school days before
           const sendDays = getDaysRemaining(sendDue);
           timelines.push({
             type: "IEP Send Draft",
@@ -529,7 +592,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 1. Send invitation (20 days out)
         if (!student.reevalInvitationSentDate) {
-          const inviteDue = addDays(rmDate, -20);
+          const inviteDue = addDays(rmDate, -deadlines.reevalInvitation);
           timelines.push({
             type: "Re-eval Invitation",
             label: "Send Re-eval Invitation",
@@ -543,7 +606,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 2. Direct Observation (sometime in week 13 days before)
         if (!student.reevalDirectObservationCompleted) {
-          const obsDue = addDays(rmDate, -13);
+          const obsDue = addDays(rmDate, -deadlines.reevalObservation);
           const obsDays = getDaysRemaining(obsDue);
           timelines.push({
             type: "Re-eval Observation",
@@ -558,7 +621,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
         // 3. psychologist Handoff (10 days before)
         if (!student.reevalPsychologistHandoffDate) {
-          const handoffDue = addDays(rmDate, -10);
+          const handoffDue = addDays(rmDate, -deadlines.reevalPsychHandoff);
           const handoffDays = getDaysRemaining(handoffDue);
           timelines.push({
             type: "Re-eval Psych Handoff",
@@ -603,6 +666,7 @@ class StudentStore {
   constructor() {
     this.listeners = [];
     this.debounceTimer = null;
+    window.store = this;
     
     // Load config from localStorage
     const savedClientId = localStorage.getItem("aegis_client_id") || "";
@@ -615,6 +679,18 @@ class StudentStore {
     try {
       const parsed = JSON.parse(localStorage.getItem("aegis_report_card_dates"));
       if (parsed && Array.isArray(parsed) && parsed.length > 0) savedReportCardDates = parsed;
+    } catch(e) {}
+
+    let savedDeadlines = DEFAULT_DEADLINES;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("aegis_deadlines"));
+      if (parsed && typeof parsed === "object") savedDeadlines = { ...DEFAULT_DEADLINES, ...parsed };
+    } catch(e) {}
+
+    let savedHolidays = DEFAULT_HOLIDAYS;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("aegis_holidays"));
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) savedHolidays = parsed;
     } catch(e) {}
 
     let savedTeacherEmails = {
@@ -659,6 +735,8 @@ class StudentStore {
       calendarSyncEnabled: savedCalendarSync,
       teacherEmails: savedTeacherEmails,
       reportCardDates: savedReportCardDates,
+      deadlines: savedDeadlines,
+      holidays: savedHolidays,
 
       // Data Arrays
       students: cachedStudents || INITIAL_STUDENTS,
@@ -720,6 +798,8 @@ class StudentStore {
     if (newState.calendarSyncEnabled !== undefined) localStorage.setItem("aegis_calendar_sync", newState.calendarSyncEnabled ? "true" : "false");
     if (newState.teacherEmails !== undefined) localStorage.setItem("aegis_teacher_emails", JSON.stringify(newState.teacherEmails));
     if (newState.reportCardDates !== undefined) localStorage.setItem("aegis_report_card_dates", JSON.stringify(newState.reportCardDates));
+    if (newState.deadlines !== undefined) localStorage.setItem("aegis_deadlines", JSON.stringify(newState.deadlines));
+    if (newState.holidays !== undefined) localStorage.setItem("aegis_holidays", JSON.stringify(newState.holidays));
     if (newState.accessToken !== undefined) {
       if (newState.accessToken) {
         localStorage.setItem("aegis_access_token", newState.accessToken);
@@ -848,6 +928,8 @@ class StudentStore {
             "Mr. Adams": "adams@rcschools.net"
           },
           reportCardDates: cloudData.reportCardDates || this.state.reportCardDates || DEFAULT_REPORT_CARD_DATES,
+          deadlines: cloudData.deadlines || this.state.deadlines || DEFAULT_DEADLINES,
+          holidays: cloudData.holidays || this.state.holidays || DEFAULT_HOLIDAYS,
           syncStatus: "synced",
           flashingGreen: true
         });
@@ -858,6 +940,8 @@ class StudentStore {
         localStorage.setItem("aegis_calendar_sync", this.state.calendarSyncEnabled ? "true" : "false");
         localStorage.setItem("aegis_teacher_emails", JSON.stringify(this.state.teacherEmails));
         localStorage.setItem("aegis_report_card_dates", JSON.stringify(this.state.reportCardDates));
+        localStorage.setItem("aegis_deadlines", JSON.stringify(this.state.deadlines));
+        localStorage.setItem("aegis_holidays", JSON.stringify(this.state.holidays));
         
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
       } else {
@@ -869,7 +953,9 @@ class StudentStore {
           emailAlertsEnabled: this.state.emailAlertsEnabled,
           calendarSyncEnabled: this.state.calendarSyncEnabled,
           teacherEmails: this.state.teacherEmails,
-          reportCardDates: this.state.reportCardDates
+          reportCardDates: this.state.reportCardDates,
+          deadlines: this.state.deadlines,
+          holidays: this.state.holidays
         };
         const newFileId = await driveService.createFile(this.state.accessToken, "all-data.json", initialPayload, folderId);
         
@@ -913,7 +999,9 @@ class StudentStore {
           emailAlertsEnabled: this.state.emailAlertsEnabled,
           calendarSyncEnabled: this.state.calendarSyncEnabled,
           teacherEmails: this.state.teacherEmails,
-          reportCardDates: this.state.reportCardDates
+          reportCardDates: this.state.reportCardDates,
+          deadlines: this.state.deadlines,
+          holidays: this.state.holidays
         };
 
         const folderId = this.state.aegisFolderId;
