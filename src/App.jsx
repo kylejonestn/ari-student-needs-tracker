@@ -55,7 +55,7 @@ export default function App() {
       case "screening":
         return { title: "Screening & Placement Matrix", subtitle: "Tennessee K-12 Gifted Scoring Grid (IGAM)" };
       case "iep":
-        return { title: "Write IEPs Caseload Timeline", subtitle: "Annual IEP scheduling & checklist tracking" };
+        return { title: "IEP Caseload Timeline", subtitle: "Annual IEP scheduling & checklist tracking" };
       case "reeval":
         return { title: "Re-evaluation Center", subtitle: "Triennial reviews & direct observation trackers" };
       case "progress":

@@ -712,7 +712,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                   <div className="timeline-student-meta">
                     <span>Grade: <strong>{student.grade}</strong></span>
                     <span>Teacher: <strong>{student.classroomTeacher}</strong></span>
-                    <span>Annual Review Due: <strong style={{ color: getDaysRemaining(student.iepReviewDate) <= 30 ? "var(--accent-rose)" : "inherit" }}>{student.iepReviewDate || "Not Set"}</strong></span>
+                    <span>IEP Due Date: <strong style={{ color: getDaysRemaining(student.iepDueDate) <= 30 ? "var(--accent-rose)" : "inherit" }}>{student.iepDueDate || "Not Set"}</strong></span>
                     {student.iepMeetingDate && (
                       <span style={{ color: "var(--accent-purple)" }}>
                         Meeting: <strong>{student.iepMeetingDate}</strong>

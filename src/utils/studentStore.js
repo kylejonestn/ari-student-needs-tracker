@@ -413,14 +413,14 @@ export const calculateTimelines = (student, isScreening = false) => {
       });
     }
 
-    // Annual IEP Review (365 days)
-    if (student.iepReviewDate) {
-      const daysLeft = getDaysRemaining(student.iepReviewDate);
+    // IEP Due Date (365 days)
+    if (student.iepDueDate) {
+      const daysLeft = getDaysRemaining(student.iepDueDate);
       timelines.push({
-        type: "Annual IEP Review",
-        label: "Annual IEP Review",
+        type: "IEP Due Date",
+        label: "IEP Due Date",
         desc: "Mandatory annual update of IEP goals, accommodations, and special education services.",
-        dueDate: student.iepReviewDate,
+        dueDate: student.iepDueDate,
         daysRemaining: daysLeft,
         status: daysLeft <= 0 ? "overdue" : daysLeft <= 30 ? "warning" : "on-track",
         mandatory: true
@@ -709,6 +709,15 @@ class StudentStore {
     let cachedScreenings = null;
     try {
       cachedStudents = JSON.parse(localStorage.getItem("aegis_students"));
+      if (cachedStudents) {
+        cachedStudents = cachedStudents.map(student => {
+          if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
+            student.iepDueDate = student.iepReviewDate;
+            delete student.iepReviewDate;
+          }
+          return student;
+        });
+      }
       cachedScreenings = JSON.parse(localStorage.getItem("aegis_screenings"));
     } catch (e) {
       console.error("Local cache load failed", e);
@@ -916,7 +925,13 @@ class StudentStore {
           allDataFileId: fileId,
           parentPortalFileId: parentFileId || null,
           aegisFolderId: folderId,
-          students: cloudData.students || [],
+          students: (cloudData.students || []).map(student => {
+            if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
+              student.iepDueDate = student.iepReviewDate;
+              delete student.iepReviewDate;
+            }
+            return student;
+          }),
           screenings: cloudData.screenings || [],
           workEmail: cloudData.workEmail || this.state.workEmail || "ariel.facilitator@rcschools.net",
           emailAlertsEnabled: cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : this.state.emailAlertsEnabled,
@@ -1245,7 +1260,7 @@ class StudentStore {
       classroomTeacher: screening.classroomTeacher,
       classroomTeacherEmail: screening.classroomTeacherEmail || "",
       status: "Active",
-      iepReviewDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
+      iepDueDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
       reevalDueDate: addDays(new Date().toISOString().split("T")[0], 3 * 365), // 3 years later
       accommodations: initialAccommodations,
       selNeeds: {

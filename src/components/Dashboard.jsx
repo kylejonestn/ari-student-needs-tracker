@@ -100,7 +100,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           case "August Calendar":
             stepIndex = 0;
             break;
-          case "Annual IEP Review":
+          case "IEP Due Date":
             stepIndex = 1;
             break;
           case "IEP Invitation":
@@ -240,11 +240,11 @@ export default function Dashboard({ students, screenings, updateScreening }) {
       return;
     }
     store.updateStudent(studentId, {
-      iepReviewDate: proposedDate,
+      iepMeetingDate: proposedDate,
       augustSetupComplete: true
     });
     pushActivity(`Completed August bulk setup for ${student.name}. Proposed IEP meeting date: ${proposedDate}.`);
-    alert(`August setup concluded for ${student.name}! IEP Review Date updated.`);
+    alert(`August setup concluded for ${student.name}! Scheduled IEP Meeting Date set.`);
   };
 
   // Mark all Friday signature tasks complete for a student
@@ -435,8 +435,8 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                       type="date"
                       className="input-field"
                       style={{ padding: "4px 8px", fontSize: "12px" }}
-                      value={student.augustProposedDate || ""}
-                      onChange={(e) => store.updateStudent(student.id, { augustProposedDate: e.target.value })}
+                      value={student.iepMeetingDate || ""}
+                      onChange={(e) => store.updateStudent(student.id, { iepMeetingDate: e.target.value })}
                     />
                   </div>
                   <label style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "12px", cursor: "pointer", fontWeight: "500" }}>
@@ -458,8 +458,8 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                   <button 
                     className="btn btn-primary"
                     style={{ padding: "6px 12px", fontSize: "11px" }}
-                    onClick={() => handleAugustComplete(student.id, student.augustProposedDate)}
-                    disabled={!student.augustProposedDate || !student.augustParentLetterSent || !student.augustTeacherInvitesSent}
+                    onClick={() => handleAugustComplete(student.id, student.iepMeetingDate)}
+                    disabled={!student.iepMeetingDate || !student.augustParentLetterSent || !student.augustTeacherInvitesSent}
                   >
                     Complete Setup
                   </button>

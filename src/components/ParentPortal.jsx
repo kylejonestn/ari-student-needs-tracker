@@ -22,7 +22,7 @@ export default function ParentPortal({ students, updateStudent }) {
       school: student.school,
       classroomTeacher: student.classroomTeacher,
       status: student.status,
-      iepReviewDate: student.iepReviewDate,
+      iepDueDate: student.iepDueDate,
       reevalDueDate: student.reevalDueDate,
       accommodations: student.accommodations || [],
       selNeeds: student.selNeeds ? {
@@ -62,7 +62,7 @@ School: Blackman Middle School
 Classroom Teacher: ${parentData.classroomTeacher}
 
 --- UPCOMING IEP TIMELINES ---
-Annual IEP Review Due: ${parentData.iepReviewDate}
+IEP Due Date: ${parentData.iepDueDate}
 Triennial Re-evaluation Due: ${parentData.reevalDueDate}
 
 --- CLASSROOM GIFTED ACCOMMODATIONS ---
@@ -260,8 +260,8 @@ Sent from Aegis Student Needs Tracker.`;
               
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "13px" }}>
                 <div style={{ padding: "10px", borderRadius: "6px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)" }}>
-                  <label style={{ color: "var(--text-muted)", fontSize: "11px", display: "block" }}>Annual IEP Review Due</label>
-                  <span style={{ fontWeight: "700", color: "var(--accent-amber)" }}>{parentData.iepReviewDate}</span>
+                  <label style={{ color: "var(--text-muted)", fontSize: "11px", display: "block" }}>IEP Due Date</label>
+                  <span style={{ fontWeight: "700", color: "var(--accent-amber)" }}>{parentData.iepDueDate}</span>
                 </div>
                 <div style={{ padding: "10px", borderRadius: "6px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)" }}>
                   <label style={{ color: "var(--text-muted)", fontSize: "11px", display: "block" }}>Triennial Re-evaluation Due</label>

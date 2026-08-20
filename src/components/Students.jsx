@@ -44,7 +44,7 @@ export default function Students({
     name: "",
     grade: "",
     classroomTeacher: "",
-    iepReviewDate: "",
+    iepDueDate: "",
     reevalDueDate: "",
     accommodations: ""
   });
@@ -113,7 +113,7 @@ export default function Students({
         name: "",
         grade: "",
         classroomTeacher: "",
-        iepReviewDate: "",
+        iepDueDate: "",
         reevalDueDate: "",
         accommodations: ""
       };
@@ -122,7 +122,7 @@ export default function Students({
         name: ["name", "student", "full name", "student name", "fullname"],
         grade: ["grade", "grade level", "class grade", "gradelevel"],
         classroomTeacher: ["teacher", "homeroom", "classroom teacher", "homeroom teacher", "core teacher", "subject teacher"],
-        iepReviewDate: ["iep", "iep date", "iep review", "annual iep", "review date"],
+        iepDueDate: ["iep", "iep date", "iep review", "annual iep", "review date"],
         reevalDueDate: ["reeval", "reeval date", "re-eval", "triennial", "re-evaluation"],
         accommodations: ["accommodations", "supports", "services", "accoms"]
       };
@@ -165,7 +165,7 @@ export default function Students({
       const name = getVal("name");
       const grade = getVal("grade");
       const teacher = getVal("classroomTeacher");
-      const iepDate = getVal("iepReviewDate");
+      const iepDate = getVal("iepDueDate");
       const reevalDate = getVal("reevalDueDate");
       const accomsRaw = getVal("accommodations");
 
@@ -185,7 +185,7 @@ export default function Students({
         grade: grade || "",
         school: "Blackman Middle School",
         classroomTeacher: teacher || "",
-        iepReviewDate: iepDate || "",
+        iepDueDate: iepDate || "",
         reevalDueDate: reevalDate || "",
         accommodations,
         isValid: !!name && isValidDate(iepDate) && isValidDate(reevalDate),
@@ -193,7 +193,7 @@ export default function Students({
           name: !name,
           grade: false,
           classroomTeacher: false,
-          iepReviewDate: !isValidDate(iepDate),
+          iepDueDate: !isValidDate(iepDate),
           reevalDueDate: !isValidDate(reevalDate)
         }
       };
@@ -210,12 +210,12 @@ export default function Students({
       return;
     }
 
-    addStudents(validStudents.map(({ name, grade, school, classroomTeacher, iepReviewDate, reevalDueDate, accommodations }) => ({
+    addStudents(validStudents.map(({ name, grade, school, classroomTeacher, iepDueDate, reevalDueDate, accommodations }) => ({
       name,
       grade,
       school,
       classroomTeacher,
-      iepReviewDate,
+      iepDueDate,
       reevalDueDate,
       accommodations
     })));
@@ -230,7 +230,7 @@ export default function Students({
       name: "",
       grade: "",
       classroomTeacher: "",
-      iepReviewDate: "",
+      iepDueDate: "",
       reevalDueDate: "",
       accommodations: ""
     });
@@ -263,7 +263,7 @@ export default function Students({
       grade: newGrade,
       school: "Blackman Middle School",
       classroomTeacher: newTeacher,
-      iepReviewDate: newIepDate,
+      iepDueDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
     });
@@ -387,7 +387,7 @@ export default function Students({
 
             <div className="form-row">
               <div className="form-group">
-                <label>Annual IEP Review Date</label>
+                <label>IEP Due Date</label>
                 <input
                   type="date"
                   className="input-field"
@@ -505,8 +505,8 @@ export default function Students({
                   <span>{student.classroomTeacher}</span>
                 </span>
                 <span>
-                  <label>IEP Annual Due:</label>
-                  <span style={{ fontWeight: "600" }}>{student.iepReviewDate}</span>
+                  <label>IEP Due Date:</label>
+                  <span style={{ fontWeight: "600" }}>{student.iepDueDate}</span>
                 </span>
                 <span>
                   <label>Accommodations:</label>
@@ -835,16 +835,16 @@ export default function Students({
                     />
                   </div>
                   <div>
-                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Annual IEP Due:</label>
+                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>IEP Due Date:</label>
                     <input
                       type="date"
                       className="input-field"
                       style={{ padding: "6px 10px", fontSize: "12px", width: "100%", color: "var(--accent-amber)" }}
-                      value={selectedStudent.iepReviewDate || ""}
+                      value={selectedStudent.iepDueDate || ""}
                       onChange={(e) => {
-                        const updated = { ...selectedStudent, iepReviewDate: e.target.value };
+                        const updated = { ...selectedStudent, iepDueDate: e.target.value };
                         setSelectedStudent(updated);
-                        updateStudent(selectedStudent.id, { iepReviewDate: e.target.value });
+                        updateStudent(selectedStudent.id, { iepDueDate: e.target.value });
                       }}
                     />
                   </div>
@@ -1172,7 +1172,7 @@ export default function Students({
                     { key: "name", label: "Student Full Name", req: true },
                     { key: "grade", label: "Grade Level", req: false },
                     { key: "classroomTeacher", label: "Classroom Teacher", req: false },
-                    { key: "iepReviewDate", label: "Annual IEP Review Date", req: false },
+                    { key: "iepDueDate", label: "IEP Due Date", req: false },
                     { key: "reevalDueDate", label: "Triennial Re-evaluation Date", req: false },
                     { key: "accommodations", label: "Accommodations List", req: false }
                   ].map((field) => (
@@ -1260,8 +1260,8 @@ export default function Students({
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.classroomTeacher ? "700" : "500", color: row.validationErrors.classroomTeacher ? "var(--accent-rose)" : "inherit" }}>
                             {row.classroomTeacher || "(Not Set)"}
                           </td>
-                          <td style={{ padding: "10px", fontWeight: row.validationErrors.iepReviewDate ? "700" : "500", color: row.validationErrors.iepReviewDate ? "var(--accent-rose)" : "inherit" }}>
-                            {row.iepReviewDate || "(Not Set)"}
+                          <td style={{ padding: "10px", fontWeight: row.validationErrors.iepDueDate ? "700" : "500", color: row.validationErrors.iepDueDate ? "var(--accent-rose)" : "inherit" }}>
+                            {row.iepDueDate || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.reevalDueDate ? "700" : "500", color: row.validationErrors.reevalDueDate ? "var(--accent-rose)" : "inherit" }}>
                             {row.reevalDueDate || "(Not Set)"}
