@@ -149,12 +149,28 @@ export const getDaysRemaining = (targetDateStr) => {
   return diffDays;
 };
 
-// Add days to a date string and return YYYY-MM-DD
+// Adjust a date to the nearest school day if it falls on a weekend or holiday/break
+// direction = -1 to search earlier in time (e.g. for deadlines prior to an event)
+// direction = 1 to search later in time (e.g. for deadlines following an event)
+export const adjustToSchoolDay = (dateStr, direction = -1) => {
+  if (!dateStr || dateStr === "TBD") return dateStr;
+  let date = new Date(dateStr + "T12:00:00");
+  let count = 0;
+  while (!isSchoolDay(date.toISOString().split("T")[0]) && count < 30) {
+    date.setDate(date.getDate() + direction);
+    count++;
+  }
+  return date.toISOString().split("T")[0];
+};
+
+// Add days to a date string and return YYYY-MM-DD (adjusted to school days)
 export const addDays = (dateStr, days) => {
   if (!dateStr) return "";
   const date = new Date(dateStr + "T12:00:00");
   date.setDate(date.getDate() + days);
-  return date.toISOString().split("T")[0];
+  const calculatedDate = date.toISOString().split("T")[0];
+  const direction = days < 0 ? -1 : 1;
+  return adjustToSchoolDay(calculatedDate, direction);
 };
 
 // Default email mappings for core BMS teachers
