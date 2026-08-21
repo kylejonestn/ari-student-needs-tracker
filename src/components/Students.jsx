@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud } from "lucide-react";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
 import { guessTeacherEmail, store } from "../utils/studentStore";
 
 export default function Students({ 
@@ -957,61 +957,264 @@ export default function Students({
                      Add
                    </button>
                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {selectedStudent.accommodations && selectedStudent.accommodations
+                      .map((accom, originalIdx) => ({ accom, originalIdx }))
+                      .filter(({ accom }) => !accom.deleted)
+                      .map(({ accom, originalIdx }) => {
+                        const noteCount = accom.notes?.length || 0;
+                        const isExpanded = !!expandedAccoms[originalIdx];
 
-                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                   {selectedStudent.accommodations && selectedStudent.accommodations.map((accom, index) => (
-                     <div key={index} style={{
-                       display: "flex",
-                       alignItems: "center",
-                       justifyContent: "space-between",
-                       padding: "8px 12px",
-                       borderRadius: "6px",
-                       backgroundColor: "var(--bg-primary)",
-                       fontSize: "13px",
-                       border: "1px solid var(--border-color)"
-                     }}>
-                       <div style={{display: "flex", flexDirection: "column", gap: "4px"}}>
-                         <span>{accom.label}</span>
-                         <button style={{ background: "transparent", border: "none", color: "var(--accent-rose)", cursor: "pointer", fontWeight: "600" }} onClick={() => toggleAccom(index)}>
-                           Notes {expandedAccoms[index] ? "▲" : "▼"}
-                         </button>
-                         {expandedAccoms[index] && (
-                           <div style={{ marginTop: "4px" }}>
-                             {accom.notes && accom.notes
-                               .slice()
-                               .sort((a,b) => new Date(b.date) - new Date(a.date))
-                               .map((note, i) => (
-                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
-                                   <span>{note.date}: {note.text}</span>
-                                   <span>
-                                     <button onClick={() => editNote(index, i)} style={{ marginRight: "4px" }}>Edit</button>
-                                     <button onClick={() => deleteNote(index, i)}>Delete</button>
-                                   </span>
-                                 </div>
-                               ))
-                             }
-                             <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-                               <input
-                                 value={accomNoteInput[index] || ''}
-                                 onChange={e => setAccomNoteInput(prev => ({ ...prev, [index]: e.target.value }))}
-                                 placeholder="Add note"
-                                 style={{ flexGrow: 1 }}
-                               />
-                               <button onClick={() => addNote(index)}>Add</button>
-                             </div>
-                           </div>
-                         )}
-                       </div>
-                       <button style={{ background: "transparent", border: "none", color: "var(--accent-rose)", cursor: "pointer", fontWeight: "600" }} onClick={() => handleRemoveAccommodation(selectedStudent.id, index)}>
-                         Remove
-                       </button>
-                     </div>
-                   ))}
-                   {(!selectedStudent.accommodations || selectedStudent.accommodations.length === 0) && (
-                     <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "10px" }}>No accommodations logged.</p>
-                   )}
-                 </div>
-               </div>
+                        return (
+                          <div
+                            key={originalIdx}
+                            style={{
+                              borderRadius: "8px",
+                              backgroundColor: "var(--bg-primary)",
+                              border: `1px solid ${isExpanded ? "rgba(168, 85, 247, 0.4)" : "var(--border-color)"}`,
+                              overflow: "hidden",
+                              transition: "all 0.15s ease",
+                              boxShadow: isExpanded ? "0 2px 8px rgba(0,0,0,0.15)" : "none"
+                            }}
+                          >
+                            {/* Card Header Row */}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "10px 14px",
+                                gap: "10px"
+                              }}
+                            >
+                              <span style={{ fontSize: "13.5px", fontWeight: "600", color: "var(--text-heading)", flexGrow: 1 }}>
+                                {accom.label}
+                              </span>
+
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAccom(originalIdx)}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "5px",
+                                    padding: "4px 10px",
+                                    borderRadius: "6px",
+                                    fontSize: "12px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                    backgroundColor: isExpanded
+                                      ? "rgba(168, 85, 247, 0.2)"
+                                      : (noteCount > 0 ? "rgba(168, 85, 247, 0.1)" : "var(--bg-sidebar)"),
+                                    color: (noteCount > 0 || isExpanded) ? "var(--accent-purple)" : "var(--text-muted)",
+                                    border: `1px solid ${isExpanded ? "var(--accent-purple)" : "var(--border-color)"}`,
+                                    transition: "all 0.15s ease"
+                                  }}
+                                  title="View and add implementation notes"
+                                >
+                                  <MessageSquare size={13} />
+                                  <span>{noteCount > 0 ? `Notes (${noteCount})` : "Add Note"}</span>
+                                  {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAccommodation(selectedStudent.id, originalIdx)}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "var(--text-muted)",
+                                    cursor: "pointer",
+                                    padding: "4px 6px",
+                                    borderRadius: "4px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    fontSize: "12px"
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-rose)")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                  title="Remove accommodation"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Expanded Notes Sub-Panel */}
+                            {isExpanded && (
+                              <div
+                                style={{
+                                  borderTop: "1px solid var(--border-color)",
+                                  backgroundColor: "var(--bg-sidebar)",
+                                  padding: "12px 14px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "8px"
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: "11px",
+                                    fontWeight: "700",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.5px",
+                                    color: "var(--text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "5px"
+                                  }}
+                                >
+                                  <StickyNote size={12} />
+                                  Implementation & Observation Notes
+                                </div>
+
+                                {accom.notes && accom.notes.length > 0 ? (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                    {accom.notes
+                                      .slice()
+                                      .sort((a, b) => new Date(b.date) - new Date(a.date))
+                                      .map((note, i) => (
+                                        <div
+                                          key={i}
+                                          style={{
+                                            backgroundColor: "var(--bg-primary)",
+                                            border: "1px solid var(--border-color)",
+                                            borderRadius: "6px",
+                                            padding: "8px 10px",
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "4px"
+                                          }}
+                                        >
+                                          <div
+                                            style={{
+                                              display: "flex",
+                                              justifyContent: "space-between",
+                                              alignItems: "center"
+                                            }}
+                                          >
+                                            <span
+                                              style={{
+                                                fontSize: "10.5px",
+                                                fontWeight: "600",
+                                                color: "var(--accent-purple)",
+                                                backgroundColor: "rgba(168, 85, 247, 0.1)",
+                                                padding: "2px 6px",
+                                                borderRadius: "4px"
+                                              }}
+                                            >
+                                              📅 {note.date}
+                                            </span>
+                                            <div style={{ display: "flex", gap: "4px" }}>
+                                              <button
+                                                type="button"
+                                                onClick={() => editNote(originalIdx, i)}
+                                                style={{
+                                                  background: "none",
+                                                  border: "none",
+                                                  color: "var(--text-muted)",
+                                                  cursor: "pointer",
+                                                  padding: "2px 4px",
+                                                  display: "flex",
+                                                  alignItems: "center"
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-purple)")}
+                                                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                                title="Edit note"
+                                              >
+                                                <Edit2 size={12} />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => deleteNote(originalIdx, i)}
+                                                style={{
+                                                  background: "none",
+                                                  border: "none",
+                                                  color: "var(--text-muted)",
+                                                  cursor: "pointer",
+                                                  padding: "2px 4px",
+                                                  display: "flex",
+                                                  alignItems: "center"
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-rose)")}
+                                                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                                                title="Delete note"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          <div
+                                            style={{
+                                              fontSize: "12.5px",
+                                              color: "var(--text-main)",
+                                              lineHeight: "1.4"
+                                            }}
+                                          >
+                                            {note.text}
+                                          </div>
+                                        </div>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      color: "var(--text-muted)",
+                                      fontStyle: "italic",
+                                      padding: "4px 0"
+                                    }}
+                                  >
+                                    No notes added yet for this accommodation.
+                                  </div>
+                                )}
+
+                                {/* Add Note Input */}
+                                <div style={{ display: "flex", gap: "6px", marginTop: "4px" }}>
+                                  <input
+                                    type="text"
+                                    className="input-field"
+                                    value={accomNoteInput[originalIdx] || ""}
+                                    onChange={(e) =>
+                                      setAccomNoteInput((prev) => ({
+                                        ...prev,
+                                        [originalIdx]: e.target.value
+                                      }))
+                                    }
+                                    onKeyDown={(e) => e.key === "Enter" && addNote(originalIdx)}
+                                    placeholder="Add implementation note or teacher feedback..."
+                                    style={{ flexGrow: 1, padding: "6px 10px", fontSize: "12px" }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={() => addNote(originalIdx)}
+                                    style={{
+                                      padding: "6px 12px",
+                                      fontSize: "12px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      backgroundColor: "var(--accent-purple)"
+                                    }}
+                                  >
+                                    <Plus size={13} />
+                                    Add Note
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {(!selectedStudent.accommodations || selectedStudent.accommodations.filter(a => !a.deleted).length === 0) && (
+                      <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "14px", backgroundColor: "var(--bg-primary)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                        No accommodations logged yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
 
               {/* IEP Meeting Prep & Data Mining Workspace */}
               <div style={{ padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
