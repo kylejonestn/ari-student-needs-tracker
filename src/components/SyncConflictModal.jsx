@@ -3,7 +3,8 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { AlertCircle, CheckCircle, X, Zap, Database, Cloud } from "lucide-react";
+import { AlertCircle, CheckCircle, X, Zap, Database, Cloud, Sparkles } from "lucide-react";
+import { getDifferences } from "../utils/studentStore.js";
 
 /**
  * Props:
@@ -35,7 +36,11 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
   };
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "Unknown Date";
+    if (!dateStr) return "Original Cloud Record (Legacy)";
+    const time = new Date(dateStr).getTime();
+    if (isNaN(time) || time <= 86400000) {
+      return "Original Cloud Record (Legacy)";
+    }
     try {
       const d = new Date(dateStr);
       return d.toLocaleString(undefined, {
@@ -50,17 +55,119 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
     }
   };
 
-  const getRecordSummary = (item) => {
-    if (!item) return "No details";
+  const renderHighlightedSummary = (item, diffKeys = new Set(), isLocal = true) => {
+    if (!item) return <span style={{ color: "var(--text-muted)" }}>No details</span>;
+
     const parts = [];
-    if (item.grade) parts.push(`Grade: ${item.grade}`);
-    if (item.classroomTeacher) parts.push(`Teacher: ${item.classroomTeacher}`);
-    if (item.iepDueDate) parts.push(`IEP Due: ${item.iepDueDate}`);
-    if (item.status) parts.push(`Status: ${item.status}`);
-    if (Array.isArray(item.accommodations)) {
-      parts.push(`Accoms: ${item.accommodations.length}`);
+
+    // Grade
+    if (item.grade) {
+      const isDiff = diffKeys.has("grade");
+      parts.push(
+        <span
+          key="grade"
+          style={{
+            color: isDiff ? "var(--accent-amber)" : "inherit",
+            fontWeight: isDiff ? "700" : "normal",
+            backgroundColor: isDiff ? "rgba(245, 158, 11, 0.12)" : "transparent",
+            padding: isDiff ? "1px 4px" : "0",
+            borderRadius: "4px"
+          }}
+        >
+          Grade: {item.grade}
+        </span>
+      );
     }
-    return parts.length > 0 ? parts.join(" • ") : "Record profile";
+
+    // Teacher
+    if (item.classroomTeacher) {
+      const isDiff = diffKeys.has("classroomTeacher");
+      parts.push(
+        <span
+          key="teacher"
+          style={{
+            color: isDiff ? "var(--accent-amber)" : "inherit",
+            fontWeight: isDiff ? "700" : "normal",
+            backgroundColor: isDiff ? "rgba(245, 158, 11, 0.12)" : "transparent",
+            padding: isDiff ? "1px 4px" : "0",
+            borderRadius: "4px"
+          }}
+        >
+          Teacher: {item.classroomTeacher}
+        </span>
+      );
+    }
+
+    // IEP Due
+    const iepDate = item.iepDueDate || item.iepReviewDate;
+    if (iepDate) {
+      const isDiff = diffKeys.has("iepDueDate");
+      parts.push(
+        <span
+          key="iep"
+          style={{
+            color: isDiff ? "var(--accent-amber)" : "inherit",
+            fontWeight: isDiff ? "700" : "normal",
+            backgroundColor: isDiff ? "rgba(245, 158, 11, 0.12)" : "transparent",
+            padding: isDiff ? "1px 4px" : "0",
+            borderRadius: "4px"
+          }}
+        >
+          IEP Due: {iepDate}
+        </span>
+      );
+    }
+
+    // Status
+    if (item.status) {
+      const isDiff = diffKeys.has("status");
+      parts.push(
+        <span
+          key="status"
+          style={{
+            color: isDiff ? "var(--accent-amber)" : "inherit",
+            fontWeight: isDiff ? "700" : "normal",
+            backgroundColor: isDiff ? "rgba(245, 158, 11, 0.12)" : "transparent",
+            padding: isDiff ? "1px 4px" : "0",
+            borderRadius: "4px"
+          }}
+        >
+          Status: {item.status}
+        </span>
+      );
+    }
+
+    // Accommodations
+    if (Array.isArray(item.accommodations)) {
+      const isDiff = diffKeys.has("accommodations") || diffKeys.has("notes");
+      const validAccoms = item.accommodations.filter(a => !a.deleted);
+      const notesCount = validAccoms.reduce((acc, a) => acc + (a.notes?.length || 0), 0);
+      parts.push(
+        <span
+          key="accoms"
+          style={{
+            color: isDiff ? "var(--accent-amber)" : "inherit",
+            fontWeight: isDiff ? "700" : "normal",
+            backgroundColor: isDiff ? "rgba(245, 158, 11, 0.12)" : "transparent",
+            padding: isDiff ? "1px 4px" : "0",
+            borderRadius: "4px"
+          }}
+        >
+          Accoms: {validAccoms.length} {notesCount > 0 ? `(${notesCount} notes)` : ""}
+        </span>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center", lineHeight: "1.5" }}>
+        {parts.map((p, idx) => (
+          <React.Fragment key={idx}>
+            {idx > 0 && <span style={{ color: "var(--text-muted)" }}>•</span>}
+            {p}
+          </React.Fragment>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -81,7 +188,7 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
         className="glass-panel"
         style={{
           width: "100%",
-          maxWidth: "760px",
+          maxWidth: "800px",
           maxHeight: "88vh",
           display: "flex",
           flexDirection: "column",
@@ -124,7 +231,7 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                 Cloud Sync: Data Conflicts Detected
               </h3>
               <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-muted)" }}>
-                {conflictList.length} record(s) differ between your device and Google Drive.
+                {conflictList.length} record(s) differ between your device and Google Drive. Review the highlighted differences below.
               </p>
             </div>
           </div>
@@ -200,7 +307,7 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
             overflowY: "auto",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "14px",
             paddingRight: "4px"
           }}
         >
@@ -208,26 +315,29 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
             const localTime = new Date(conflict.local?.updatedAt || 0).getTime();
             const cloudTime = new Date(conflict.cloud?.updatedAt || 0).getTime();
             const isLocalNewer = localTime >= cloudTime;
+            const diffs = getDifferences(conflict.local, conflict.cloud, conflict.type);
+            const diffKeys = new Set(diffs.map(d => d.key));
 
             return (
               <div
                 key={conflict.id}
                 style={{
                   border: "1px solid var(--border-color)",
-                  borderRadius: "10px",
+                  borderRadius: "12px",
                   padding: "14px",
                   backgroundColor: "var(--bg-primary)"
                 }}
               >
+                {/* Title and Category Badge */}
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    marginBottom: "10px"
+                    marginBottom: "8px"
                   }}
                 >
-                  <span style={{ fontWeight: "700", fontSize: "14px", color: "var(--accent-purple)" }}>
+                  <span style={{ fontWeight: "700", fontSize: "14.5px", color: "var(--accent-purple)" }}>
                     {conflict.name || conflict.id}
                   </span>
                   <span
@@ -245,12 +355,57 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                   </span>
                 </div>
 
+                {/* Differences Highlight Banner */}
+                {diffs.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      flexWrap: "wrap",
+                      backgroundColor: "rgba(245, 158, 11, 0.08)",
+                      border: "1px solid rgba(245, 158, 11, 0.25)",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      marginBottom: "10px"
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        color: "var(--accent-amber)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px"
+                      }}
+                    >
+                      <Sparkles size={12} /> Changed:
+                    </span>
+                    {diffs.map((d, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 7px",
+                          borderRadius: "6px",
+                          backgroundColor: "rgba(245, 158, 11, 0.15)",
+                          color: "var(--accent-amber)",
+                          fontWeight: "600"
+                        }}
+                      >
+                        {d.field}: <strong style={{ color: "var(--text-heading)" }}>{d.local}</strong> vs <strong style={{ color: "var(--text-muted)" }}>{d.cloud}</strong>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Side-by-side comparison cards */}
                 <div
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
-                    gap: "12px",
-                    marginTop: "8px"
+                    gap: "12px"
                   }}
                 >
                   {/* Local Option */}
@@ -259,8 +414,8 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                       border: `1.5px solid ${
                         conflict.keep === "local" ? "var(--accent-purple)" : "var(--border-color)"
                       }`,
-                      borderRadius: "8px",
-                      padding: "10px",
+                      borderRadius: "10px",
+                      padding: "12px",
                       cursor: "pointer",
                       backgroundColor:
                         conflict.keep === "local"
@@ -294,8 +449,8 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                     <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                       Modified: {formatDate(conflict.local?.updatedAt)}
                     </div>
-                    <div style={{ fontSize: "11.5px", color: "var(--text-main)", lineHeight: "1.3" }}>
-                      {getRecordSummary(conflict.local)}
+                    <div style={{ fontSize: "11.5px", color: "var(--text-main)", marginTop: "2px" }}>
+                      {renderHighlightedSummary(conflict.local, diffKeys, true)}
                     </div>
                   </label>
 
@@ -305,8 +460,8 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                       border: `1.5px solid ${
                         conflict.keep === "cloud" ? "var(--accent-purple)" : "var(--border-color)"
                       }`,
-                      borderRadius: "8px",
-                      padding: "10px",
+                      borderRadius: "10px",
+                      padding: "12px",
                       cursor: "pointer",
                       backgroundColor:
                         conflict.keep === "cloud"
@@ -340,8 +495,8 @@ export default function SyncConflictModal({ conflicts = [], onResolve, onCancel 
                     <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
                       Modified: {formatDate(conflict.cloud?.updatedAt)}
                     </div>
-                    <div style={{ fontSize: "11.5px", color: "var(--text-main)", lineHeight: "1.3" }}>
-                      {getRecordSummary(conflict.cloud)}
+                    <div style={{ fontSize: "11.5px", color: "var(--text-main)", marginTop: "2px" }}>
+                      {renderHighlightedSummary(conflict.cloud, diffKeys, false)}
                     </div>
                   </label>
                 </div>

@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StudentStore } from "./studentStore.js";
+import { StudentStore, getDifferences } from "./studentStore.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -288,6 +288,31 @@ describe("Smart Cloud Sync - Undo & Preservation", () => {
     assert.equal(store.state.students[0].id, "stu-local-orig");
     assert.equal(store.state.students[0].name, "Original Local Student");
     assert.equal(store.state.hasUndoBackup, false);
+  });
+});
+
+describe("SyncConflictModal - getDifferences helper", () => {
+  it("should detect and describe differences between local and cloud student records", () => {
+    const localStudent = {
+      grade: "7th",
+      classroomTeacher: "Mrs. Harrison",
+      iepDueDate: "2027-06-04",
+      accommodations: [{ label: "Compacting", notes: ["Note 1", "Note 2"] }]
+    };
+    const cloudStudent = {
+      grade: "6th",
+      classroomTeacher: "Ms. Davis",
+      iepDueDate: "2027-04-10",
+      accommodations: [{ label: "Compacting", notes: [] }]
+    };
+
+    const diffs = getDifferences(localStudent, cloudStudent, "students");
+    const diffKeys = diffs.map(d => d.key);
+
+    assert.ok(diffKeys.includes("grade"), "Should detect grade diff");
+    assert.ok(diffKeys.includes("classroomTeacher"), "Should detect teacher diff");
+    assert.ok(diffKeys.includes("iepDueDate"), "Should detect IEP due date diff");
+    assert.ok(diffKeys.includes("notes"), "Should detect accommodation notes diff");
   });
 });
 

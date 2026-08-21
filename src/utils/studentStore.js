@@ -1003,12 +1003,39 @@ export class StudentStore {
           const localTime = new Date(localItem.updatedAt || 0).getTime();
           const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
 
-          const localCopy = { ...localItem, updatedAt: null };
-          const cloudCopy = { ...cloudItem, updatedAt: null };
-          const isContentIdentical = JSON.stringify(localCopy) === JSON.stringify(cloudCopy);
+          const normalizeEntity = (item) => {
+            if (!item) return item;
+            const copy = { ...item };
+            delete copy.updatedAt;
+            
+            // Standardize accommodations
+            if (Array.isArray(copy.accommodations)) {
+              copy.accommodations = copy.accommodations
+                .filter(a => !a.deleted)
+                .map(a => {
+                  if (typeof a === "string") return { label: a, notes: [] };
+                  return { label: a.label, notes: a.notes || [] };
+                });
+            }
+
+            // Standardize review vs due date alias
+            if (copy.iepReviewDate !== undefined && copy.iepDueDate === undefined) {
+              copy.iepDueDate = copy.iepReviewDate;
+              delete copy.iepReviewDate;
+            }
+
+            // Clean undefined keys
+            Object.keys(copy).forEach(k => {
+              if (copy[k] === undefined) delete copy[k];
+            });
+
+            return copy;
+          };
+
+          const isContentIdentical = JSON.stringify(normalizeEntity(localItem)) === JSON.stringify(normalizeEntity(cloudItem));
 
           if (isContentIdentical) {
-            // Identical content: keep the one with newer updatedAt
+            // Identical content: keep the one with newer updatedAt (or local if cloud has epoch 0)
             result.push(localTime >= cloudTime ? localItem : cloudItem);
             stats.identical++;
           } else {
@@ -1752,3 +1779,166 @@ export class StudentStore {
 
 export const store = new StudentStore();
 export default store;
+
+/**
+ * Compute differences between local and cloud records to highlight what changed
+ */
+export function getDifferences(local = {}, cloud = {}, type = "students") {
+  const diffs = [];
+
+  if (type === "students") {
+    // 1. Grade
+    if (local.grade !== cloud.grade) {
+      diffs.push({
+        field: "Grade",
+        key: "grade",
+        local: local.grade || "None",
+        cloud: cloud.grade || "None"
+      });
+    }
+
+    // 2. Classroom Teacher
+    if (local.classroomTeacher !== cloud.classroomTeacher) {
+      diffs.push({
+        field: "Teacher",
+        key: "classroomTeacher",
+        local: local.classroomTeacher || "Unassigned",
+        cloud: cloud.classroomTeacher || "Unassigned"
+      });
+    }
+
+    // 3. IEP Due Date
+    const localIep = local.iepDueDate || local.iepReviewDate;
+    const cloudIep = cloud.iepDueDate || cloud.iepReviewDate;
+    if (localIep !== cloudIep) {
+      diffs.push({
+        field: "IEP Due Date",
+        key: "iepDueDate",
+        local: localIep || "None",
+        cloud: cloudIep || "None"
+      });
+    }
+
+    // 4. Status
+    if (local.status !== cloud.status) {
+      diffs.push({
+        field: "Status",
+        key: "status",
+        local: local.status || "Active",
+        cloud: cloud.status || "Active"
+      });
+    }
+
+    // 5. Accommodations
+    const localAccoms = (local.accommodations || []).filter(a => !a.deleted);
+    const cloudAccoms = (cloud.accommodations || []).filter(a => !a.deleted);
+    const localLabels = localAccoms.map(a => (typeof a === "string" ? a : a.label)).sort();
+    const cloudLabels = cloudAccoms.map(a => (typeof a === "string" ? a : a.label)).sort();
+
+    const localNotesCount = localAccoms.reduce((acc, a) => acc + (a.notes?.length || 0), 0);
+    const cloudNotesCount = cloudAccoms.reduce((acc, a) => acc + (a.notes?.length || 0), 0);
+
+    if (JSON.stringify(localLabels) !== JSON.stringify(cloudLabels)) {
+      diffs.push({
+        field: "Accommodations",
+        key: "accommodations",
+        local: `${localAccoms.length} item(s)`,
+        cloud: `${cloudAccoms.length} item(s)`
+      });
+    } else if (localNotesCount !== cloudNotesCount) {
+      diffs.push({
+        field: "Observation Notes",
+        key: "notes",
+        local: `${localNotesCount} note(s)`,
+        cloud: `${cloudNotesCount} note(s)`
+      });
+    }
+
+    // 6. IEP Meeting Prep / Checklist
+    const localMining = !!local.iepDataMiningCompleted;
+    const cloudMining = !!cloud.iepDataMiningCompleted;
+    if (localMining !== cloudMining) {
+      diffs.push({
+        field: "Data Mining",
+        key: "iepDataMiningCompleted",
+        local: localMining ? "Completed" : "Pending",
+        cloud: cloudMining ? "Completed" : "Pending"
+      });
+    }
+
+    const localSurvey = !!local.iepTransitionSurveyCompleted;
+    const cloudSurvey = !!cloud.iepTransitionSurveyCompleted;
+    if (localSurvey !== cloudSurvey) {
+      diffs.push({
+        field: "Transition Survey",
+        key: "iepTransitionSurveyCompleted",
+        local: localSurvey ? "Completed" : "Pending",
+        cloud: cloudSurvey ? "Completed" : "Pending"
+      });
+    }
+
+    // 7. Progress Reports
+    const localPR = (local.progressReports || []).length;
+    const cloudPR = (cloud.progressReports || []).length;
+    if (localPR !== cloudPR) {
+      diffs.push({
+        field: "Progress Reports",
+        key: "progressReports",
+        local: `${localPR} logged`,
+        cloud: `${cloudPR} logged`
+      });
+    }
+  } else if (type === "screenings") {
+    // 1. Status
+    if (local.status !== cloud.status) {
+      diffs.push({
+        field: "Phase / Status",
+        key: "status",
+        local: local.status || "Referred",
+        cloud: cloud.status || "Referred"
+      });
+    }
+
+    // 2. Grade
+    if (local.grade !== cloud.grade) {
+      diffs.push({
+        field: "Grade",
+        key: "grade",
+        local: local.grade || "None",
+        cloud: cloud.grade || "None"
+      });
+    }
+
+    // 3. Teacher
+    if (local.classroomTeacher !== cloud.classroomTeacher) {
+      diffs.push({
+        field: "Teacher",
+        key: "classroomTeacher",
+        local: local.classroomTeacher || "Unassigned",
+        cloud: cloud.classroomTeacher || "Unassigned"
+      });
+    }
+
+    // 4. Evaluation deadline
+    if (local.evaluationDueDate !== cloud.evaluationDueDate) {
+      diffs.push({
+        field: "Eval Due Date",
+        key: "evaluationDueDate",
+        local: local.evaluationDueDate || "None",
+        cloud: cloud.evaluationDueDate || "None"
+      });
+    }
+  }
+
+  // Fallback if content was marked conflicted but high-level keys are subtle
+  if (diffs.length === 0) {
+    diffs.push({
+      field: "Data Record",
+      key: "general",
+      local: "Updated details / notes",
+      cloud: "Legacy cloud values"
+    });
+  }
+
+  return diffs;
+}
