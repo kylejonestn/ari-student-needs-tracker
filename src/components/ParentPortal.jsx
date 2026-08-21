@@ -196,7 +196,19 @@ Sent from Aegis Student Needs Tracker.`;
                       {report.goals && report.goals.map((goal, gIdx) => (
                         <div key={gIdx} style={{ fontSize: "13px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "600", marginBottom: "4px" }}>
-                            <span>{goal.title}</span>
+                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>{goal.title}</span>
+                              {goal.category && (
+                                <span style={{ 
+                                  padding: "1px 6px",
+                                  fontSize: "9px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "var(--accent-purple-light)",
+                                  color: "var(--accent-purple)",
+                                  fontWeight: "600"
+                                }}>{goal.category}</span>
+                              )}
+                            </span>
                             <span style={{ 
                               color: goal.progress === "Achieved" ? "var(--accent-emerald)" : "var(--accent-purple)",
                               backgroundColor: goal.progress === "Achieved" ? "var(--accent-emerald-light)" : "var(--accent-purple-light)",
@@ -230,18 +242,18 @@ Sent from Aegis Student Needs Tracker.`;
             <div>
               <h3 style={{ fontSize: "16px", marginBottom: "12px" }}>Classroom Gifted Accommodations</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {parentData.accommodations && parentData.accommodations.map((accom, index) => (
-                  <span key={index} style={{ 
-                    padding: "6px 12px", 
-                    borderRadius: "20px", 
-                    backgroundColor: "var(--accent-purple-light)", 
-                    color: "var(--accent-purple)", 
-                    fontSize: "12px",
-                    fontWeight: "600"
-                  }}>
-                    ✔ {accom}
-                  </span>
-                ))}
+                {parentData.accommodations && parentData.accommodations.map((accom, i) => (
+                <div key={i} style={{
+                  padding: "6px 12px",
+                  borderRadius: "20px",
+                  backgroundColor: "var(--accent-purple-light)",
+                  color: "var(--accent-purple)",
+                  fontSize: "12px",
+                  fontWeight: "600"
+                }}>
+                  ✔ {accom.label}
+                </div>
+              ))}
                 {(!parentData.accommodations || parentData.accommodations.length === 0) && (
                   <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>No accommodations logged.</p>
                 )}

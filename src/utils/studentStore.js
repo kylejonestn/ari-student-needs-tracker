@@ -2,8 +2,8 @@
    Aegis Gifted Tracker - studentStore State Management
    ========================================== */
 
-import { INITIAL_STUDENTS, INITIAL_SCREENINGS } from "./mockData";
-import { driveService } from "./driveService";
+import { INITIAL_STUDENTS, INITIAL_SCREENINGS } from "./mockData.js";
+import { driveService } from "./driveService.js";
 
 // Default Google OAuth Client ID for project 382674408500
 export const DEFAULT_CLIENT_ID = "382674408500-il976m1gmjnpafrd7ilqnhtln0copmnp.apps.googleusercontent.com";
@@ -590,7 +590,7 @@ export const calculateTimelines = (student, isScreening = false) => {
     }
 
     // Triennial Re-evaluation (3 years)
-    if (student.reevalDueDate) {
+    if (student.isReeval) {
       const daysLeft = getDaysRemaining(student.reevalDueDate);
       timelines.push({
         type: "Triennial Re-evaluation",
@@ -603,7 +603,19 @@ export const calculateTimelines = (student, isScreening = false) => {
       });
 
       // Triennial Re-eval workflow milestones (triggered if a reeval meeting date is set)
-      if (student.reevalMeetingDate && !student.reevalMeetingCompleted) {
+      if (!student.reevalMeetingDate) {
+        const schedDue = addDays(student.reevalDueDate, -14);
+        const schedDays = getDaysRemaining(schedDue);
+        timelines.push({
+          type: "Re-eval Schedule",
+          label: "Schedule Re-eval Meeting",
+          desc: "Schedule the triennial re-evaluation meeting date (typically 2 weeks before due date).",
+          dueDate: schedDue,
+          daysRemaining: schedDays,
+          status: schedDays <= 0 ? "overdue" : schedDays <= 5 ? "warning" : "on-track",
+          mandatory: false
+        });
+      } else {
         const rmDate = student.reevalMeetingDate;
 
         // 1. Send invitation (20 days out)
@@ -635,7 +647,22 @@ export const calculateTimelines = (student, isScreening = false) => {
           });
         }
 
-        // 3. psychologist Handoff (10 days before)
+        // 3. Re-eval Surveys (10 days before)
+        if (!student.reevalParentSurveyReturned || !student.reevalTeacherSurveyReturned || !student.reevalSelfSurveyCompleted) {
+          const surveyDue = addDays(rmDate, -deadlines.reevalPsychHandoff);
+          const surveyDays = getDaysRemaining(surveyDue);
+          timelines.push({
+            type: "Re-eval Surveys Check",
+            label: "Complete Re-eval Surveys",
+            desc: "Collect Parent and Teacher re-eval surveys and complete Facilitator survey.",
+            dueDate: surveyDue,
+            daysRemaining: surveyDays,
+            status: surveyDays <= 0 ? "overdue" : surveyDays <= 2 ? "warning" : "on-track",
+            mandatory: false
+          });
+        }
+
+        // 4. psychologist Handoff (10 days before)
         if (!student.reevalPsychologistHandoffDate) {
           const handoffDue = addDays(rmDate, -deadlines.reevalPsychHandoff);
           const handoffDays = getDaysRemaining(handoffDue);
@@ -678,34 +705,44 @@ export const calculateTimelines = (student, isScreening = false) => {
 };
 
 // Global Store State Holder (Simple Pub/Sub)
-class StudentStore {
+export class StudentStore {
   constructor() {
     this.listeners = [];
     this.debounceTimer = null;
-    window.store = this;
+    if (typeof window !== "undefined") {
+      window.store = this;
+    }
     
     // Load config from localStorage
-    const savedClientId = localStorage.getItem("aegis_client_id") || "";
-    const savedTheme = localStorage.getItem("aegis_theme") || "light";
-    const savedWorkEmail = localStorage.getItem("aegis_work_email") || "ariel.facilitator@rcschools.net";
-    const savedEmailAlerts = localStorage.getItem("aegis_email_alerts") === "false" ? false : true;
-    const savedCalendarSync = localStorage.getItem("aegis_calendar_sync") === "false" ? false : true;
+    const getStorageItem = (key) => {
+      try {
+        return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const savedClientId = getStorageItem("aegis_client_id") || "";
+    const savedTheme = getStorageItem("aegis_theme") || "light";
+    const savedWorkEmail = getStorageItem("aegis_work_email") || "ariel.facilitator@rcschools.net";
+    const savedEmailAlerts = getStorageItem("aegis_email_alerts") === "false" ? false : true;
+    const savedCalendarSync = getStorageItem("aegis_calendar_sync") === "false" ? false : true;
     
     let savedReportCardDates = DEFAULT_REPORT_CARD_DATES;
     try {
-      const parsed = JSON.parse(localStorage.getItem("aegis_report_card_dates"));
+      const parsed = JSON.parse(getStorageItem("aegis_report_card_dates"));
       if (parsed && Array.isArray(parsed) && parsed.length > 0) savedReportCardDates = parsed;
     } catch(e) {}
 
     let savedDeadlines = DEFAULT_DEADLINES;
     try {
-      const parsed = JSON.parse(localStorage.getItem("aegis_deadlines"));
+      const parsed = JSON.parse(getStorageItem("aegis_deadlines"));
       if (parsed && typeof parsed === "object") savedDeadlines = { ...DEFAULT_DEADLINES, ...parsed };
     } catch(e) {}
 
     let savedHolidays = DEFAULT_HOLIDAYS;
     try {
-      const parsed = JSON.parse(localStorage.getItem("aegis_holidays"));
+      const parsed = JSON.parse(getStorageItem("aegis_holidays"));
       if (parsed && Array.isArray(parsed) && parsed.length > 0) savedHolidays = parsed;
     } catch(e) {}
 
@@ -716,7 +753,7 @@ class StudentStore {
       "Mr. Adams": "adams@rcschools.net"
     };
     try {
-      const parsed = JSON.parse(localStorage.getItem("aegis_teacher_emails"));
+      const parsed = JSON.parse(getStorageItem("aegis_teacher_emails"));
       if (parsed) savedTeacherEmails = parsed;
     } catch(e) {}
     
@@ -724,23 +761,41 @@ class StudentStore {
     let cachedStudents = null;
     let cachedScreenings = null;
     try {
-      cachedStudents = JSON.parse(localStorage.getItem("aegis_students"));
+      cachedStudents = JSON.parse(getStorageItem("aegis_students"));
       if (cachedStudents) {
         cachedStudents = cachedStudents.map(student => {
           if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
             student.iepDueDate = student.iepReviewDate;
             delete student.iepReviewDate;
           }
+          // Normalize accommodations to objects, preserving empties and duplicates
+          if (Array.isArray(student.accommodations)) {
+            student.accommodations = student.accommodations.map(a => typeof a === 'string' ? { label: a, notes: [] } : a);
+          } else {
+            student.accommodations = [];
+          }
+          if (!student.updatedAt) {
+            student.updatedAt = new Date().toISOString();
+          }
           return student;
         });
       }
-      cachedScreenings = JSON.parse(localStorage.getItem("aegis_screenings"));
+
+      cachedScreenings = JSON.parse(getStorageItem("aegis_screenings"));
+      if (cachedScreenings) {
+        cachedScreenings = cachedScreenings.map(s => {
+          if (!s.updatedAt) {
+            s.updatedAt = new Date().toISOString();
+          }
+          return s;
+        });
+      }
     } catch (e) {
       console.error("Local cache load failed", e);
     }
 
-    const savedAccessToken = localStorage.getItem("aegis_access_token") || null;
-    const savedTokenExpiry = localStorage.getItem("aegis_token_expiry") ? parseInt(localStorage.getItem("aegis_token_expiry"), 10) : null;
+    const savedAccessToken = getStorageItem("aegis_access_token") || null;
+    const savedTokenExpiry = getStorageItem("aegis_token_expiry") ? parseInt(getStorageItem("aegis_token_expiry"), 10) : null;
     const isTokenValid = savedAccessToken && savedTokenExpiry && Date.now() < savedTokenExpiry;
 
     this.state = {
@@ -750,9 +805,9 @@ class StudentStore {
       syncError: null,
       accessToken: isTokenValid ? savedAccessToken : null,
       tokenExpiry: isTokenValid ? savedTokenExpiry : null,
-      allDataFileId: localStorage.getItem("aegis_all_data_fid") || null,
-      parentPortalFileId: localStorage.getItem("aegis_parent_fid") || null,
-      aegisFolderId: localStorage.getItem("aegis_folder_id") || null,
+      allDataFileId: getStorageItem("aegis_all_data_fid") || null,
+      parentPortalFileId: getStorageItem("aegis_parent_fid") || null,
+      aegisFolderId: getStorageItem("aegis_folder_id") || null,
       
       // Email parameters
       workEmail: savedWorkEmail,
@@ -779,11 +834,16 @@ class StudentStore {
       selectedIepStepIndex: null,
       selectedReevalStudentId: null,
       selectedProgressStudentId: null,
-      selectedProgressQuarter: null
+      selectedProgressQuarter: null,
+      toastMessage: "",
+      toastStudentId: null,
+      toastQuarter: null
     };
 
     // Apply theme
-    document.documentElement.setAttribute("data-theme", savedTheme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", savedTheme);
+    }
 
     // Auto-connect if previous session is still valid
     if (isTokenValid) {
@@ -813,42 +873,50 @@ class StudentStore {
     this.state = { ...this.state, ...newState };
     
     // Sync critical local storage keys immediately
-    if (newState.theme) localStorage.setItem("aegis_theme", newState.theme);
-    if (newState.clientId !== undefined) localStorage.setItem("aegis_client_id", newState.clientId);
-    if (newState.allDataFileId) localStorage.setItem("aegis_all_data_fid", newState.allDataFileId);
-    if (newState.parentPortalFileId) localStorage.setItem("aegis_parent_fid", newState.parentPortalFileId);
-    if (newState.aegisFolderId !== undefined) localStorage.setItem("aegis_folder_id", newState.aegisFolderId || "");
-    if (newState.workEmail !== undefined) localStorage.setItem("aegis_work_email", newState.workEmail);
-    if (newState.emailAlertsEnabled !== undefined) localStorage.setItem("aegis_email_alerts", newState.emailAlertsEnabled ? "true" : "false");
-    if (newState.calendarSyncEnabled !== undefined) localStorage.setItem("aegis_calendar_sync", newState.calendarSyncEnabled ? "true" : "false");
-    if (newState.teacherEmails !== undefined) localStorage.setItem("aegis_teacher_emails", JSON.stringify(newState.teacherEmails));
-    if (newState.reportCardDates !== undefined) localStorage.setItem("aegis_report_card_dates", JSON.stringify(newState.reportCardDates));
-    if (newState.deadlines !== undefined) localStorage.setItem("aegis_deadlines", JSON.stringify(newState.deadlines));
-    if (newState.holidays !== undefined) localStorage.setItem("aegis_holidays", JSON.stringify(newState.holidays));
-    if (newState.accessToken !== undefined) {
-      if (newState.accessToken) {
-        localStorage.setItem("aegis_access_token", newState.accessToken);
-      } else {
-        localStorage.removeItem("aegis_access_token");
+    if (typeof localStorage !== "undefined") {
+      try {
+        if (newState.theme) localStorage.setItem("aegis_theme", newState.theme);
+        if (newState.clientId !== undefined) localStorage.setItem("aegis_client_id", newState.clientId);
+        if (newState.allDataFileId) localStorage.setItem("aegis_all_data_fid", newState.allDataFileId);
+        if (newState.parentPortalFileId) localStorage.setItem("aegis_parent_fid", newState.parentPortalFileId);
+        if (newState.aegisFolderId !== undefined) localStorage.setItem("aegis_folder_id", newState.aegisFolderId || "");
+        if (newState.workEmail !== undefined) localStorage.setItem("aegis_work_email", newState.workEmail);
+        if (newState.emailAlertsEnabled !== undefined) localStorage.setItem("aegis_email_alerts", newState.emailAlertsEnabled ? "true" : "false");
+        if (newState.calendarSyncEnabled !== undefined) localStorage.setItem("aegis_calendar_sync", newState.calendarSyncEnabled ? "true" : "false");
+        if (newState.teacherEmails !== undefined) localStorage.setItem("aegis_teacher_emails", JSON.stringify(newState.teacherEmails));
+        if (newState.reportCardDates !== undefined) localStorage.setItem("aegis_report_card_dates", JSON.stringify(newState.reportCardDates));
+        if (newState.deadlines !== undefined) localStorage.setItem("aegis_deadlines", JSON.stringify(newState.deadlines));
+        if (newState.holidays !== undefined) localStorage.setItem("aegis_holidays", JSON.stringify(newState.holidays));
+        if (newState.accessToken !== undefined) {
+          if (newState.accessToken) {
+            localStorage.setItem("aegis_access_token", newState.accessToken);
+          } else {
+            localStorage.removeItem("aegis_access_token");
+          }
+        }
+        if (newState.tokenExpiry !== undefined) {
+          if (newState.tokenExpiry) {
+            localStorage.setItem("aegis_token_expiry", newState.tokenExpiry.toString());
+          } else {
+            localStorage.removeItem("aegis_token_expiry");
+          }
+        }
+        
+        // Save database cache in localStorage for instant offline access
+        localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
+        localStorage.setItem("aegis_screenings", JSON.stringify(this.state.screenings));
+      } catch (e) {
+        console.error("localStorage update failed", e);
       }
     }
-    if (newState.tokenExpiry !== undefined) {
-      if (newState.tokenExpiry) {
-        localStorage.setItem("aegis_token_expiry", newState.tokenExpiry.toString());
-      } else {
-        localStorage.removeItem("aegis_token_expiry");
-      }
-    }
-    
-    // Save database cache in localStorage for instant offline access
-    localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
-    localStorage.setItem("aegis_screenings", JSON.stringify(this.state.screenings));
     
     this.emit();
   }
 
   setTheme(theme) {
-    document.documentElement.setAttribute("data-theme", theme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
     this.updateState({ theme });
   }
 
@@ -904,7 +972,194 @@ class StudentStore {
     return this.state.accessToken && this.state.tokenExpiry && Date.now() < this.state.tokenExpiry;
   }
 
-  // Load Database from Google Drive
+  // Merge local and cloud data based on updatedAt timestamps
+  mergeWithCloud(localData, cloudData) {
+    const merged = {};
+    const conflicts = [];
+
+    // Helper to merge entity collections (students, screenings)
+    const mergeEntities = (key) => {
+      const localArr = (localData[key] || []).map(item => ({
+        ...item,
+        updatedAt: item.updatedAt || new Date(0).toISOString()
+      }));
+      const cloudArr = (cloudData[key] || []).map(item => ({
+        ...item,
+        updatedAt: item.updatedAt || new Date(0).toISOString()
+      }));
+
+      const cloudMap = new Map();
+      cloudArr.forEach(item => cloudMap.set(item.id, item));
+      const result = [];
+
+      localArr.forEach(localItem => {
+        const cloudItem = cloudMap.get(localItem.id);
+        if (!cloudItem) {
+          // Local only
+          result.push(localItem);
+        } else {
+          const localTime = new Date(localItem.updatedAt || 0).getTime();
+          const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
+
+          const localCopy = { ...localItem, updatedAt: null };
+          const cloudCopy = { ...cloudItem, updatedAt: null };
+          const isContentIdentical = JSON.stringify(localCopy) === JSON.stringify(cloudCopy);
+
+          if (isContentIdentical) {
+            // Identical content: keep the one with newer updatedAt
+            result.push(localTime >= cloudTime ? localItem : cloudItem);
+          } else {
+            // Content differs between local and cloud -> conflict
+            conflicts.push({
+              id: localItem.id,
+              type: key,
+              name: localItem.name || cloudItem.name || localItem.id,
+              local: localItem,
+              cloud: cloudItem,
+              keep: localTime >= cloudTime ? "local" : "cloud"
+            });
+            result.push(localTime >= cloudTime ? localItem : cloudItem);
+          }
+          cloudMap.delete(localItem.id);
+        }
+      });
+
+      // Add cloud-only entities
+      cloudMap.forEach(cloudItem => {
+        result.push(cloudItem);
+      });
+
+      merged[key] = result;
+    };
+
+    mergeEntities("students");
+    mergeEntities("screenings");
+
+    // Settings and configuration merge
+    merged.workEmail = cloudData.workEmail || localData.workEmail || "ariel.facilitator@rcschools.net";
+    merged.emailAlertsEnabled = cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : localData.emailAlertsEnabled;
+    merged.calendarSyncEnabled = cloudData.calendarSyncEnabled !== undefined ? cloudData.calendarSyncEnabled : localData.calendarSyncEnabled;
+    merged.teacherEmails = { ...(localData.teacherEmails || {}), ...(cloudData.teacherEmails || {}) };
+    merged.reportCardDates = cloudData.reportCardDates || localData.reportCardDates || DEFAULT_REPORT_CARD_DATES;
+    merged.deadlines = { ...DEFAULT_DEADLINES, ...(localData.deadlines || {}), ...(cloudData.deadlines || {}) };
+    merged.holidays = (cloudData.holidays && cloudData.holidays.length > 0) ? cloudData.holidays : (localData.holidays || DEFAULT_HOLIDAYS);
+
+    return { merged, conflicts };
+  }
+
+  // Apply resolution from conflict modal
+  applyResolution(conflicts, resolveAllNewest = false) {
+    let currentStudents = [...this.state.students];
+    let currentScreenings = [...this.state.screenings];
+
+    (conflicts || []).forEach(c => {
+      let chosen;
+      if (resolveAllNewest) {
+        const localTime = new Date(c.local.updatedAt || 0).getTime();
+        const cloudTime = new Date(c.cloud.updatedAt || 0).getTime();
+        chosen = localTime >= cloudTime ? c.local : c.cloud;
+      } else {
+        chosen = c.keep === "cloud" ? c.cloud : c.local;
+      }
+
+      if (c.type === "students") {
+        const idx = currentStudents.findIndex(s => s.id === c.id);
+        if (idx >= 0) {
+          currentStudents[idx] = chosen;
+        } else {
+          currentStudents.push(chosen);
+        }
+      } else if (c.type === "screenings") {
+        const idx = currentScreenings.findIndex(s => s.id === c.id);
+        if (idx >= 0) {
+          currentScreenings[idx] = chosen;
+        } else {
+          currentScreenings.push(chosen);
+        }
+      }
+    });
+
+    this.updateState({
+      students: currentStudents,
+      screenings: currentScreenings,
+      syncStatus: "synced",
+      conflicts: [],
+      mergedData: null,
+      flashingGreen: true
+    });
+
+    setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+
+    // Push merged resolved data back to Google Drive immediately
+    this.triggerCloudSave();
+  }
+
+  // Smart cloud sync method that merges instead of overwriting
+  async syncToCloud() {
+    if (!this.isTokenValid()) {
+      this.connectGoogleDrive();
+      return;
+    }
+    try {
+      this.updateState({ syncStatus: "connecting", syncError: null });
+      
+      let folderId = this.state.aegisFolderId || localStorage.getItem("aegis_folder_id");
+      if (!folderId) {
+        folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
+        if (!folderId) {
+          folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
+        }
+        this.updateState({ aegisFolderId: folderId });
+      }
+
+      const fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+      if (!fileId) {
+        // No cloud file exists yet -> save current state as cloud master
+        this.triggerCloudSave();
+        this.updateState({ syncStatus: "synced", flashingGreen: true });
+        setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+        return { merged: this.state, conflicts: [] };
+      }
+
+      const cloudData = await driveService.readFile(this.state.accessToken, fileId);
+      const { merged, conflicts } = this.mergeWithCloud(this.state, cloudData);
+
+      if (conflicts && conflicts.length > 0) {
+        this.updateState({
+          syncStatus: "conflict",
+          conflicts,
+          mergedData: merged
+        });
+        return { merged, conflicts };
+      }
+
+      // No conflicts -> apply merged data and immediately update cloud
+      this.updateState({
+        students: merged.students || this.state.students,
+        screenings: merged.screenings || this.state.screenings,
+        workEmail: merged.workEmail || this.state.workEmail,
+        emailAlertsEnabled: merged.emailAlertsEnabled !== undefined ? merged.emailAlertsEnabled : this.state.emailAlertsEnabled,
+        calendarSyncEnabled: merged.calendarSyncEnabled !== undefined ? merged.calendarSyncEnabled : this.state.calendarSyncEnabled,
+        teacherEmails: merged.teacherEmails || this.state.teacherEmails,
+        reportCardDates: merged.reportCardDates || this.state.reportCardDates,
+        deadlines: merged.deadlines || this.state.deadlines,
+        holidays: merged.holidays || this.state.holidays,
+        syncStatus: "synced",
+        conflicts: [],
+        mergedData: null,
+        flashingGreen: true
+      });
+
+      setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+
+      this.triggerCloudSave();
+      return { merged, conflicts: [] };
+    } catch (err) {
+      console.error(err);
+      this.updateState({ syncStatus: "error", syncError: `Cloud Sync Failed: ${err.message}` });
+    }
+  }
+
   async syncFromGoogleDrive() {
     if (!this.isTokenValid()) {
       this.connectGoogleDrive();
@@ -1083,6 +1338,7 @@ class StudentStore {
         iepInvitationResponseReceived: false,
         iepTeacherChecklistSent: false,
         iepDataMiningCompleted: false,
+        updatedAt: new Date().toISOString(),
         iepTransitionSurveyCompleted: false,
         iepDraftWrittenDate: "",
         iepDraftSentDate: "",
@@ -1103,29 +1359,30 @@ class StudentStore {
 
   // Bulk Add Active Students (from CSV import)
   addStudents(newStudents) {
-    const initialized = newStudents.map((student, idx) => ({
-      id: `active-${Date.now()}-${idx}`,
-      status: "Active",
-      accommodations: student.accommodations || [],
-      progressReports: [],
-      iepMeetingDate: student.iepMeetingDate || "",
-      iepInvitationSentDate: "",
-      iepInvitationResponseReceived: false,
-      iepTeacherChecklistSent: false,
-      iepDataMiningCompleted: false,
-      iepTransitionSurveyCompleted: false,
-      iepDraftWrittenDate: "",
-      iepDraftSentDate: "",
-      iepFinalizedDate: "",
-      iepAtAGlancePrinted: false,
-      iepAtAGlanceSignaturesCompleted: false,
-      iepPulseUploadCompleted: false,
-      iepSharePointUploadCompleted: false,
-      iepPhysicalFileCompleted: false,
-      augustSetupComplete: false,
-      classroomTeacherEmail: student.classroomTeacherEmail || "",
-      ...student
-    }));
+      const initialized = newStudents.map((student, idx) => ({
+        id: `active-${Date.now()}-${idx}`,
+        status: "Active",
+        accommodations: (student.accommodations || []).map(a => typeof a === 'string' ? { label: a, notes: [] } : a),
+        progressReports: [],
+        iepMeetingDate: student.iepMeetingDate || "",
+        iepInvitationSentDate: "",
+        iepInvitationResponseReceived: false,
+        iepTeacherChecklistSent: false,
+        iepDataMiningCompleted: false,
+        iepTransitionSurveyCompleted: false,
+        iepDraftWrittenDate: "",
+        iepDraftSentDate: "",
+        iepFinalizedDate: "",
+        iepAtAGlancePrinted: false,
+        iepAtAGlanceSignaturesCompleted: false,
+        iepPulseUploadCompleted: false,
+        iepSharePointUploadCompleted: false,
+        iepPhysicalFileCompleted: false,
+        augustSetupComplete: false,
+        classroomTeacherEmail: student.classroomTeacherEmail || "",
+        updatedAt: new Date().toISOString(),
+        ...student
+      }));
 
     const updated = [...this.state.students, ...initialized];
     this.updateState({ students: updated });
@@ -1134,9 +1391,25 @@ class StudentStore {
 
   // Edit Student details
   updateStudent(studentId, updatedFields) {
+    const fieldsToUpdate = { ...updatedFields };
+    
+    // Mirror meeting dates
+    if (fieldsToUpdate.iepMeetingDate !== undefined) {
+      fieldsToUpdate.reevalMeetingDate = fieldsToUpdate.iepMeetingDate;
+    } else if (fieldsToUpdate.reevalMeetingDate !== undefined) {
+      fieldsToUpdate.iepMeetingDate = fieldsToUpdate.reevalMeetingDate;
+    }
+
+    // Mirror invitation sent dates
+    if (fieldsToUpdate.iepInvitationSentDate !== undefined) {
+      fieldsToUpdate.reevalInvitationSentDate = fieldsToUpdate.iepInvitationSentDate;
+    } else if (fieldsToUpdate.reevalInvitationSentDate !== undefined) {
+      fieldsToUpdate.iepInvitationSentDate = fieldsToUpdate.reevalInvitationSentDate;
+    }
+
     const updated = this.state.students.map(s => {
       if (s.id === studentId) {
-        return { ...s, ...updatedFields };
+        return { ...s, ...fieldsToUpdate, updatedAt: new Date().toISOString() };
       }
       return s;
     });
@@ -1153,9 +1426,10 @@ class StudentStore {
 
   // Bulk update student details
   bulkUpdateStudents(studentIds, updatedFields) {
+    const now = new Date().toISOString();
     const updated = this.state.students.map(s => {
       if (studentIds.includes(s.id)) {
-        return { ...s, ...updatedFields };
+        return { ...s, ...updatedFields, updatedAt: now };
       }
       return s;
     });
@@ -1172,6 +1446,7 @@ class StudentStore {
 
   // Bulk promote students to next grade (6th -> 7th -> 8th -> Inactive)
   bulkPromoteStudents(studentIds) {
+    const now = new Date().toISOString();
     const updated = this.state.students.map(s => {
       if (studentIds.includes(s.id)) {
         let nextGrade = s.grade;
@@ -1183,7 +1458,7 @@ class StudentStore {
         } else if (s.grade === "8th") {
           nextStatus = "Inactive"; // Graduated middle school
         }
-        return { ...s, grade: nextGrade, status: nextStatus };
+        return { ...s, grade: nextGrade, status: nextStatus, updatedAt: now };
       }
       return s;
     });
@@ -1228,6 +1503,7 @@ class StudentStore {
         discontinuationCumeFileDate: false,
         nudgeSent: false,
         classroomTeacherEmail: candidate.classroomTeacherEmail || "",
+        updatedAt: new Date().toISOString(),
         matrix: {
           cognition: { instrument: "", score: "", points: 0 },
           performance: { instrument: "", score: "", points: 0 },
@@ -1244,7 +1520,7 @@ class StudentStore {
   updateScreening(screeningId, updatedFields) {
     const updated = this.state.screenings.map(s => {
       if (s.id === screeningId) {
-        return { ...s, ...updatedFields };
+        return { ...s, ...updatedFields, updatedAt: new Date().toISOString() };
       }
       return s;
     });
@@ -1278,7 +1554,7 @@ class StudentStore {
       status: "Active",
       iepDueDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
       reevalDueDate: addDays(new Date().toISOString().split("T")[0], 3 * 365), // 3 years later
-      accommodations: initialAccommodations,
+      accommodations: (initialAccommodations || []).map(a => typeof a === 'string' ? { label: a, notes: [] } : a),
       selNeeds: {
         type: "Asynchronous Development",
         details: "Undergoing initial placement assessment. Identify core overexcitabilities.",
@@ -1300,7 +1576,8 @@ class StudentStore {
       iepPulseUploadCompleted: false,
       iepSharePointUploadCompleted: false,
       iepPhysicalFileCompleted: false,
-      augustSetupComplete: false
+      augustSetupComplete: false,
+      updatedAt: new Date().toISOString()
     };
 
     this.updateState({
@@ -1324,7 +1601,8 @@ class StudentStore {
           selNeeds: {
             ...s.selNeeds,
             logs
-          }
+          },
+          updatedAt: new Date().toISOString()
         };
       }
       return s;
@@ -1348,7 +1626,8 @@ class StudentStore {
         
         return {
           ...s,
-          progressReports: reports
+          progressReports: reports,
+          updatedAt: new Date().toISOString()
         };
       }
       return s;

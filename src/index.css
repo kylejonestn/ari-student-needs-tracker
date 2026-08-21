@@ -984,6 +984,14 @@ button, input, select, textarea {
     display: block !important;
   }
   
+  .print-only-report {
+    display: block !important;
+  }
+
+  .interactive-report-editor {
+    display: none !important;
+  }
+  
   .dashboard-columns {
     grid-template-columns: 1fr !important;
     gap: 16px !important;
@@ -992,6 +1000,10 @@ button, input, select, textarea {
 
 /* Print utility outside media print */
 .print-only {
+  display: none;
+}
+
+.print-only-report {
   display: none;
 }
 

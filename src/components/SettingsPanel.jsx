@@ -493,7 +493,7 @@ export default function SettingsPanel({
                     </button>
                     <button 
                       className="btn btn-primary" 
-                      onClick={syncFromGoogleDrive}
+                      onClick={() => store.syncToCloud()}
                       style={{ flexGrow: "1" }}
                       disabled={syncStatus === "connecting" || syncStatus === "saving"}
                     >

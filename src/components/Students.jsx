@@ -3,8 +3,8 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X } from "lucide-react";
-import { guessTeacherEmail } from "../utils/studentStore";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud } from "lucide-react";
+import { guessTeacherEmail, store } from "../utils/studentStore";
 
 export default function Students({ 
   students, 
@@ -217,7 +217,8 @@ export default function Students({
       classroomTeacher,
       iepDueDate,
       reevalDueDate,
-      accommodations
+      accommodations,
+      updatedAt: new Date().toISOString()
     })));
 
     alert(`Successfully imported ${validStudents.length} students!`);
@@ -240,6 +241,8 @@ export default function Students({
 
   // Accommodations editor state
   const [newAccomText, setNewAccomText] = useState("");
+  const [expandedAccoms, setExpandedAccoms] = useState({});
+  const [accomNoteInput, setAccomNoteInput] = useState({});
 
   const filteredStudents = students.filter(
     (student) =>
@@ -247,25 +250,81 @@ export default function Students({
       student.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const toggleAccom = (index) => {
+    setExpandedAccoms(prev => ({ ...prev, [index]: !prev[index] }));
+  };
+
+  const addNote = (accomIdx) => {
+    const noteText = accomNoteInput[accomIdx];
+    if (!noteText || !noteText.trim()) return;
+    if (!selectedStudent) return;
+    const newNote = { text: noteText.trim(), date: new Date().toLocaleDateString() };
+    const accommodations = selectedStudent.accommodations.map((ac, idx) =>
+      idx === accomIdx ? { ...ac, notes: [newNote, ...(ac.notes || [])] } : ac
+    );
+    updateStudent(selectedStudent.id, { accommodations });
+    setSelectedStudent({ ...selectedStudent, accommodations });
+    setAccomNoteInput(prev => {
+      const copy = { ...prev };
+      delete copy[accomIdx];
+      return copy;
+    });
+  };
+
+  const editNote = (accomIdx, noteIdx) => {
+    if (!selectedStudent) return;
+    const currentNote = selectedStudent.accommodations[accomIdx].notes[noteIdx];
+    const newText = prompt('Edit note', currentNote.text);
+    if (newText === null) return; // cancelled
+    const accommodations = selectedStudent.accommodations.map((ac, idx) => {
+      if (idx === accomIdx) {
+        const notes = ac.notes.map((n, i) => (i === noteIdx ? { ...n, text: newText } : n));
+        return { ...ac, notes };
+      }
+      return ac;
+    });
+    updateStudent(selectedStudent.id, { accommodations });
+    setSelectedStudent({ ...selectedStudent, accommodations });
+  };
+
+  const deleteNote = (accomIdx, noteIdx) => {
+    if (!selectedStudent) return;
+    const accommodations = selectedStudent.accommodations.map((ac, idx) => {
+      if (idx === accomIdx) {
+        const notes = ac.notes.filter((_, i) => i !== noteIdx);
+        return { ...ac, notes };
+      }
+      return ac;
+    });
+    updateStudent(selectedStudent.id, { accommodations });
+    setSelectedStudent({ ...selectedStudent, accommodations });
+  };
+
   const handleAddStudent = (e) => {
-    e.preventDefault();
-    if (!newName) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!newName.trim()) {
       alert("Please enter the student's name.");
       return;
     }
 
+    // Convert accommodation strings to objects {label, notes}
     const accomList = newAccommodations
-      ? newAccommodations.split(",").map((s) => s.trim()).filter(Boolean)
+      ? newAccommodations
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((label) => ({ label, notes: [] }))
       : [];
 
     addStudent({
-      name: newName,
+      name: newName.trim(),
       grade: newGrade,
       school: "Blackman Middle School",
       classroomTeacher: newTeacher,
       iepDueDate: newIepDate,
       reevalDueDate: newReevalDate,
       accommodations: accomList,
+      updatedAt: new Date().toISOString()
     });
 
     // Reset Form
@@ -282,10 +341,15 @@ export default function Students({
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
 
-    const accommodations = [...(student.accommodations || []), newAccomText.trim()];
+    // Normalize existing accommodations to objects
+    const existingAccoms = (student.accommodations || []).map((a) =>
+      typeof a === 'string' ? { label: a, notes: [] } : a
+    );
+    const newAccomObj = { label: newAccomText.trim(), notes: [] };
+    const accommodations = [...existingAccoms, newAccomObj];
     updateStudent(studentId, { accommodations });
     setNewAccomText("");
-    
+
     // Sync modal state
     setSelectedStudent({ ...student, accommodations });
   };
@@ -294,7 +358,7 @@ export default function Students({
     const student = students.find((s) => s.id === studentId);
     if (!student) return;
 
-    const accommodations = student.accommodations.filter((_, idx) => idx !== index);
+    const accommodations = student.accommodations.map((ac, idx) => idx === index ? { ...ac, deleted: true, deletedAt: new Date().toISOString() } : ac);
     updateStudent(studentId, { accommodations });
     
     // Sync modal state
@@ -318,15 +382,19 @@ export default function Students({
           />
         </div>
 
-        {/* Bulk Import and Add Student Actions */}
-        <div style={{ display: "flex", gap: "10px" }}>
+        {/* Bulk Import, Cloud Sync, and Add Student Actions */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button className="btn btn-secondary" onClick={() => store.syncToCloud()} title="Sync and merge database with Google Drive">
+            <RefreshCw size={16} />
+            Cloud Sync
+          </button>
           <button className="btn btn-secondary" onClick={() => setShowImportWizard(true)}>
             <FileSpreadsheet size={16} />
             Bulk Import CSV
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddForm(!showAddForm)}>
             <Plus size={16} />
-            {showAddForm ? "Show Student List" : "Add Transfer Student"}
+            {showAddForm ? "Show Student List" : "Add Student"}
           </button>
         </div>
       </div>
@@ -336,7 +404,7 @@ export default function Students({
         <div className="glass-panel" style={{ marginBottom: "24px" }}>
           <h3 style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
             <UserPlus size={20} color="var(--accent-purple)" />
-            Add New Transfer Student Profile
+            Add New Student Profile
           </h3>
           <form onSubmit={handleAddStudent}>
             <div className="form-row">
@@ -470,7 +538,11 @@ export default function Students({
             <div 
               key={student.id} 
               className="student-card"
-              style={isSelected ? { borderColor: "var(--accent-purple)", boxShadow: "0 0 10px rgba(168, 85, 247, 0.25)" } : {}}
+              onClick={() => setSelectedStudent(student)}
+              style={{
+                cursor: "pointer",
+                ...(isSelected ? { borderColor: "var(--accent-purple)", boxShadow: "0 0 10px rgba(168, 85, 247, 0.25)" } : {})
+              }}
             >
               <div className="student-card-header">
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -484,6 +556,7 @@ export default function Students({
                         setSelectedIds(prev => [...prev, student.id]);
                       }
                     }}
+                    onClick={(e) => e.stopPropagation()}
                     style={{ cursor: "pointer", width: "15px", height: "15px" }}
                   />
                   <div className="student-initials" style={isSelected ? { backgroundColor: "var(--accent-purple)", color: "#fff" } : {}}>
@@ -865,6 +938,81 @@ export default function Students({
                 </div>
               </div>
 
+               {/* Accommodations tracking */}
+               <div>
+                 <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase" }}>Accommodations List</h4>
+
+                 {/* Add Accommodation Input */}
+                 <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                   <input
+                     type="text"
+                     className="input-field"
+                     placeholder="Add custom accommodation (e.g. Curriculum Compacting)"
+                     style={{ flexGrow: "1", padding: "8px" }}
+                     value={newAccomText}
+                     onChange={(e) => setNewAccomText(e.target.value)}
+                     onKeyDown={(e) => e.key === "Enter" && handleAddAccommodation(selectedStudent.id)}
+                   />
+                   <button className="btn btn-primary" style={{ padding: "8px 12px" }} onClick={() => handleAddAccommodation(selectedStudent.id)}>
+                     Add
+                   </button>
+                 </div>
+
+                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                   {selectedStudent.accommodations && selectedStudent.accommodations.map((accom, index) => (
+                     <div key={index} style={{
+                       display: "flex",
+                       alignItems: "center",
+                       justifyContent: "space-between",
+                       padding: "8px 12px",
+                       borderRadius: "6px",
+                       backgroundColor: "var(--bg-primary)",
+                       fontSize: "13px",
+                       border: "1px solid var(--border-color)"
+                     }}>
+                       <div style={{display: "flex", flexDirection: "column", gap: "4px"}}>
+                         <span>{accom.label}</span>
+                         <button style={{ background: "transparent", border: "none", color: "var(--accent-rose)", cursor: "pointer", fontWeight: "600" }} onClick={() => toggleAccom(index)}>
+                           Notes {expandedAccoms[index] ? "▲" : "▼"}
+                         </button>
+                         {expandedAccoms[index] && (
+                           <div style={{ marginTop: "4px" }}>
+                             {accom.notes && accom.notes
+                               .slice()
+                               .sort((a,b) => new Date(b.date) - new Date(a.date))
+                               .map((note, i) => (
+                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                                   <span>{note.date}: {note.text}</span>
+                                   <span>
+                                     <button onClick={() => editNote(index, i)} style={{ marginRight: "4px" }}>Edit</button>
+                                     <button onClick={() => deleteNote(index, i)}>Delete</button>
+                                   </span>
+                                 </div>
+                               ))
+                             }
+                             <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                               <input
+                                 value={accomNoteInput[index] || ''}
+                                 onChange={e => setAccomNoteInput(prev => ({ ...prev, [index]: e.target.value }))}
+                                 placeholder="Add note"
+                                 style={{ flexGrow: 1 }}
+                               />
+                               <button onClick={() => addNote(index)}>Add</button>
+                             </div>
+                           </div>
+                         )}
+                       </div>
+                       <button style={{ background: "transparent", border: "none", color: "var(--accent-rose)", cursor: "pointer", fontWeight: "600" }} onClick={() => handleRemoveAccommodation(selectedStudent.id, index)}>
+                         Remove
+                       </button>
+                     </div>
+                   ))}
+                   {(!selectedStudent.accommodations || selectedStudent.accommodations.length === 0) && (
+                     <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "10px" }}>No accommodations logged.</p>
+                   )}
+                 </div>
+               </div>
+
               {/* IEP Meeting Prep & Data Mining Workspace */}
               <div style={{ padding: "16px", borderRadius: "8px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
                 <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase", display: "flex", gap: "6px", alignItems: "center" }}>
@@ -1013,53 +1161,6 @@ export default function Students({
                       <span>Mark Transition Survey Completed</span>
                     </label>
                   </div>
-                </div>
-              </div>
-
-              {/* Accommodations tracking */}
-              <div>
-                <h4 style={{ fontSize: "14px", color: "var(--accent-purple)", marginBottom: "8px", textTransform: "uppercase" }}>Accommodations List</h4>
-                
-                {/* Add Accommodation Input */}
-                <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="Add custom accommodation (e.g. Curriculum Compacting)"
-                    style={{ flexGrow: "1", padding: "8px" }}
-                    value={newAccomText}
-                    onChange={(e) => setNewAccomText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddAccommodation(selectedStudent.id)}
-                  />
-                  <button className="btn btn-primary" style={{ padding: "8px 12px" }} onClick={() => handleAddAccommodation(selectedStudent.id)}>
-                    Add
-                  </button>
-                </div>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {selectedStudent.accommodations && selectedStudent.accommodations.map((accom, index) => (
-                    <div key={index} style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      backgroundColor: "var(--bg-primary)",
-                      fontSize: "13px",
-                      border: "1px solid var(--border-color)"
-                    }}>
-                      <span>{accom}</span>
-                      <button 
-                        style={{ background: "transparent", border: "none", color: "var(--accent-rose)", cursor: "pointer", fontWeight: "600" }}
-                        onClick={() => handleRemoveAccommodation(selectedStudent.id, index)}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  {(!selectedStudent.accommodations || selectedStudent.accommodations.length === 0) && (
-                    <p style={{ color: "var(--text-muted)", fontSize: "13px", textAlign: "center", padding: "10px" }}>No accommodations logged.</p>
-                  )}
                 </div>
               </div>
             </div>

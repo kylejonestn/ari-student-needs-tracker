@@ -27,7 +27,6 @@ export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsPa
     { id: "students", label: "Student Directory", icon: Users },
     { id: "screening", label: "Screening Center", icon: CheckSquare },
     { id: "iep", label: "IEP Timeline", icon: FileSignature },
-    { id: "reeval", label: "Re-eval Center", icon: ClipboardList },
     { id: "progress", label: "Progress Reports", icon: FileText },
     { id: "sel", label: "SEL Studio", icon: Heart },
     { id: "settings", label: "Settings & Cloud", icon: Settings },

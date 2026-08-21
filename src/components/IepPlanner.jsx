@@ -15,11 +15,15 @@ import {
   ChevronUp, 
   User, 
   Mail, 
-  CheckSquare,
-  Square,
-  ClipboardList,
-  ArrowRight,
-  Sparkles
+  CheckSquare, 
+  Square, 
+  ClipboardList, 
+  ArrowRight, 
+  Sparkles,
+  Play,
+  Pause,
+  Send,
+  UserCheck
 } from "lucide-react";
 
 // Helper for calendar days difference
@@ -66,9 +70,163 @@ const getIepStageIndex = (student) => {
   return 7; // Completed everything
 };
 
+// Helper to determine the current active stage dynamically (0 to 8) for Re-eval
+const getReevalStageIndex = (student) => {
+  // Stage 0: August Prep
+  const isStage0Complete = student.augustSetupComplete || (student.iepAugustLetterSent && student.iepGenEdInvitesSent);
+  if (!isStage0Complete) return 0;
+  
+  // Stage 1: Parent Proposal
+  const isStage1Complete = student.iepParentProposalLetterSent && student.iepPermissionToEmailReceived && student.iepParentSurveyCompleted;
+  if (!isStage1Complete) return 1;
+  
+  // Stage 2: Formal Invitation
+  const isStage2Complete = student.iepInvitationSentDate && student.iepInvitationResponseReceived && student.iepMeetingDate;
+  if (!isStage2Complete) return 2;
+  
+  // Stage 3: Teacher Checklist & Re-eval Teacher Survey
+  const isStage3Complete = student.iepPreVocDispatched && student.iepTeacherChecklistSent && student.reevalTeacherSurveyReturned;
+  if (!isStage3Complete) return 3;
+  
+  // Stage 4: Re-eval Surveys (Parent & Facilitator)
+  const isStage4Complete = student.reevalParentSurveyReturned && student.reevalSelfSurveyCompleted;
+  if (!isStage4Complete) return 4;
+  
+  // Stage 5: Direct Observation
+  const isStage5Complete = student.reevalDirectObservationCompleted;
+  if (!isStage5Complete) return 5;
+  
+  // Stage 6: Psychologist Handoff
+  const isStage6Complete = student.reevalPsychologistHandoffDate;
+  if (!isStage6Complete) return 6;
+  
+  // Stage 7: Drafting & Delivery
+  const isStage7Complete = student.iepDraftWrittenDate && student.iepDraftSentDate;
+  if (!isStage7Complete) return 7;
+  
+  // Stage 8: Meeting & Finalize
+  const isStage8Complete = student.iepFinalizedDate && student.iepAtAGlancePrinted && student.iepAtAGlanceSignaturesCompleted && student.iepPulseUploadCompleted && student.iepSharePointUploadCompleted && student.iepPhysicalFileCompleted && student.reevalMeetingCompleted;
+  if (!isStage8Complete) return 8;
+  
+  return 9; // Completed everything
+};
+
 export default function IepPlanner({ students = [], updateStudent }) {
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   const [selectedStepIndexByStudent, setSelectedStepIndexByStudent] = useState({});
+  
+  // Observation Timer States for Re-eval Observation step
+  const [obsTimer, setObsTimer] = useState(2100);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [obsNoteText, setObsNoteText] = useState("");
+  const [showLogSuccess, setShowLogSuccess] = useState(false);
+
+  // Observation Timer Effect
+  React.useEffect(() => {
+    let interval = null;
+    if (isTimerRunning && obsTimer > 0) {
+      interval = setInterval(() => {
+        setObsTimer(prev => prev - 1);
+      }, 1000);
+    } else if (obsTimer === 0) {
+      setIsTimerRunning(false);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, obsTimer]);
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const isMeetingDayWarning = (dateStr) => {
+    if (!dateStr) return false;
+    const date = new Date(dateStr + "T12:00:00");
+    const day = date.getDay();
+    return day !== 1 && day !== 4; // Monday = 1, Thursday = 4
+  };
+
+  const handleEmailTeacherSurvey = (student) => {
+    if (!student) return;
+    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
+    const email = store.getState().workEmail || "lastname@rcschools.net";
+    const subject = encodeURIComponent(`[Aegis Action Required] Gifted Re-evaluation Survey for ${student.name}`);
+    const body = encodeURIComponent(
+      `Hi ${student.classroomTeacher || "Teacher"},\n\n` +
+      `As part of the mandatory 3-year triennial re-evaluation process for ${student.name}, ` +
+      `could you please complete the characteristics/behavior checklist as soon as possible?\n\n` +
+      `We need this compiled at least ${deadlines.reevalPsychHandoff} days before our upcoming meeting scheduled on ${student.reevalMeetingDate || "[Date TBD]"}.\n\n` +
+      `Please let me know if you have any questions or need a print copy of the survey.\n\n` +
+      `Thank you,\n` +
+      `Ariel`
+    );
+    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+  };
+
+  const handleLogObservationNotes = (student) => {
+    if (!student || !obsNoteText.trim()) return;
+    
+    const logs = student.selNeeds ? [...(student.selNeeds.logs || [])] : [];
+    logs.unshift({
+      date: new Date().toISOString().split("T")[0],
+      note: `[Classroom Re-evaluation Observation - 35min]: ${obsNoteText.trim()}`
+    });
+
+    const selNeeds = {
+      ...(student.selNeeds || {}),
+      type: student.selNeeds?.type || "Asynchronous Development",
+      logs
+    };
+
+    updateStudent(student.id, {
+      selNeeds,
+      reevalDirectObservationCompleted: true,
+      reevalDirectObservationDate: new Date().toISOString().split("T")[0]
+    });
+
+    setObsNoteText("");
+    setObsTimer(2100);
+    setShowLogSuccess(true);
+    setTimeout(() => setShowLogSuccess(false), 2000);
+  };
+
+  const handleCompleteReeval = (student) => {
+    if (!student) return;
+    
+    if (!student.reevalDirectObservationCompleted) {
+      alert("Please complete the direct classroom student observation notes first.");
+      return;
+    }
+    if (!student.reevalParentSurveyReturned || !student.reevalTeacherSurveyReturned || !student.reevalSelfSurveyCompleted) {
+      alert("Please ensure all surveys (Parent, Teacher, and Facilitator) are completed/returned.");
+      return;
+    }
+    if (!student.reevalPsychologistHandoffDate) {
+      alert("Please complete the school psychologist handoff step before holding the meeting.");
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const newReevalDueDate = addDays(today, 3 * 365);
+    
+    updateStudent(student.id, {
+      reevalDueDate: newReevalDueDate,
+      reevalMeetingDate: "",
+      reevalInvitationSentDate: "",
+      reevalParentSurveyDispatched: false,
+      reevalParentSurveyReturned: false,
+      reevalTeacherSurveyDispatched: false,
+      reevalTeacherSurveyReturned: false,
+      reevalSelfSurveyCompleted: false,
+      reevalDirectObservationCompleted: false,
+      reevalDirectObservationDate: "",
+      reevalPsychologistHandoffDate: "",
+      reevalMeetingCompleted: true
+    });
+
+    alert(`Re-evaluation completed successfully for ${student.name}! The next triennial evaluation has been calendared for ${newReevalDueDate}.`);
+  };
 
   // Sync with global store selection changes (e.g. clicked on dashboard link)
   React.useEffect(() => {
@@ -105,36 +263,86 @@ export default function IepPlanner({ students = [], updateStudent }) {
     { label: "Meeting & Finalize", short: "Finalize" }
   ];
 
+  // Stages of the Re-eval timeline stepper
+  const reevalStages = [
+    { label: "August Prep", short: "Aug Prep" },
+    { label: "Parent Proposal", short: "Parent Prop" },
+    { label: "Formal Invitation", short: "Formal Invite" },
+    { label: "Teacher Checklist", short: "Teacher Check" },
+    { label: "Re-eval Surveys", short: "Surveys" },
+    { label: "Direct Observation", short: "Observation" },
+    { label: "Psychologist Handoff", short: "Psych Handoff" },
+    { label: "Drafting & Delivery", short: "Draft & Deliv" },
+    { label: "Meeting & Finalize", short: "Finalize" }
+  ];
+
   const getStageDueDate = (student, idx, raw = false) => {
-    const meetingDate = student.iepMeetingDate;
     const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
-    let val = "";
-    switch (idx) {
-      case 0:
-        val = "2026-08-15";
-        break;
-      case 1:
-        val = meetingDate ? addDays(meetingDate, -deadlines.iepParentProposal) : "TBD";
-        break;
-      case 2:
-        val = meetingDate ? addDays(meetingDate, -deadlines.iepFormalInvitation) : "TBD";
-        break;
-      case 3:
-        val = meetingDate ? addDays(meetingDate, -deadlines.iepTeacherChecklist) : "TBD";
-        break;
-      case 4:
-        val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDataGathering) : "TBD";
-        break;
-      case 5:
-        val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDraftWritten) : "TBD";
-        break;
-      case 6:
-        val = meetingDate || "TBD";
-        break;
-      default:
-        val = "";
+    if (student.isReeval) {
+      const meetingDate = student.reevalMeetingDate || student.iepMeetingDate;
+      let val = "";
+      switch (idx) {
+        case 0:
+          val = "2026-08-15";
+          break;
+        case 1:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepParentProposal) : "TBD";
+          break;
+        case 2:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepFormalInvitation) : "TBD";
+          break;
+        case 3:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepTeacherChecklist) : "TBD";
+          break;
+        case 4:
+          val = meetingDate ? addDays(meetingDate, -deadlines.reevalPsychHandoff) : "TBD";
+          break;
+        case 5:
+          val = meetingDate ? addDays(meetingDate, -deadlines.reevalObservation) : "TBD";
+          break;
+        case 6:
+          val = meetingDate ? addDays(meetingDate, -deadlines.reevalPsychHandoff) : "TBD";
+          break;
+        case 7:
+          val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDraftWritten) : "TBD";
+          break;
+        case 8:
+          val = meetingDate || "TBD";
+          break;
+        default:
+          val = "";
+      }
+      return raw ? val : formatDate(val);
+    } else {
+      const meetingDate = student.iepMeetingDate;
+      let val = "";
+      switch (idx) {
+        case 0:
+          val = "2026-08-15";
+          break;
+        case 1:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepParentProposal) : "TBD";
+          break;
+        case 2:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepFormalInvitation) : "TBD";
+          break;
+        case 3:
+          val = meetingDate ? addDays(meetingDate, -deadlines.iepTeacherChecklist) : "TBD";
+          break;
+        case 4:
+          val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDataGathering) : "TBD";
+          break;
+        case 5:
+          val = meetingDate ? addSchoolDays(meetingDate, -deadlines.iepDraftWritten) : "TBD";
+          break;
+        case 6:
+          val = meetingDate || "TBD";
+          break;
+        default:
+          val = "";
+      }
+      return raw ? val : formatDate(val);
     }
-    return raw ? val : formatDate(val);
   };
 
   // 1. Friday Signatures Checklist aggregation
@@ -149,11 +357,11 @@ export default function IepPlanner({ students = [], updateStudent }) {
   // Warning calculator for compliance and timeline alarms
   const getIepWarnings = (student) => {
     const warnings = [];
-    const meetingDate = student.iepMeetingDate;
+    const meetingDate = student.iepMeetingDate || student.reevalMeetingDate;
     if (!meetingDate) return warnings;
     const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
 
-    // Notice compliance warning
+    // Standard notice compliance warning
     if (student.iepInvitationSentDate && !student.meetingNoticeWaived) {
       const noticeDays = getCalendarDaysDiff(student.iepInvitationSentDate, meetingDate);
       if (noticeDays !== null && noticeDays < deadlines.iepFormalInvitation) {
@@ -166,7 +374,20 @@ export default function IepPlanner({ students = [], updateStudent }) {
       }
     }
 
-    // Data gathering reminder
+    // Re-eval specific legal notice check
+    if (student.isReeval && student.reevalInvitationSentDate) {
+      const noticeDays = getCalendarDaysDiff(student.reevalInvitationSentDate, meetingDate);
+      if (noticeDays !== null && noticeDays < 10) {
+        warnings.push({
+          type: "notice-legal",
+          label: "Legal Notice Warning",
+          text: `Invitation sent on ${student.reevalInvitationSentDate} is less than the legal 10-day limit prior to the meeting.`,
+          status: "rose"
+        });
+      }
+    }
+
+    // Standard data gathering reminder
     if (!student.iepDataMiningCompleted) {
       const dataDue = addSchoolDays(meetingDate, -deadlines.iepDataGathering);
       if (getDaysRemaining(dataDue) <= 0) {
@@ -179,7 +400,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
       }
     }
 
-    // Transition survey reminder
+    // Standard transition survey reminder
     if (!student.iepTransitionSurveyCompleted) {
       const surveyDue = addSchoolDays(meetingDate, -deadlines.iepTransitionSurvey);
       if (getDaysRemaining(surveyDue) <= 0) {
@@ -192,7 +413,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
       }
     }
 
-    // Draft document writing reminder
+    // Standard draft document writing reminder
     if (!student.iepDraftWrittenDate) {
       const draftDue = addSchoolDays(meetingDate, -deadlines.iepDraftWritten);
       if (getDaysRemaining(draftDue) <= 0) {
@@ -205,7 +426,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
       }
     }
 
-    // Draft sending reminder
+    // Standard draft sending reminder
     if (!student.iepDraftSentDate) {
       const sendDue = addSchoolDays(meetingDate, -deadlines.iepDraftSent);
       if (getDaysRemaining(sendDue) <= 0) {
@@ -218,11 +439,45 @@ export default function IepPlanner({ students = [], updateStudent }) {
       }
     }
 
+    // Re-eval specific Observation reminder
+    if (student.isReeval && !student.reevalDirectObservationCompleted) {
+      const obsDue = addDays(meetingDate, -deadlines.reevalObservation);
+      if (getDaysRemaining(obsDue) <= 0) {
+        warnings.push({
+          type: "observation",
+          label: "Observation Due",
+          text: `Direct classroom observation notes should be completed (${deadlines.reevalObservation} calendar days prior; target: ${obsDue}).`,
+          status: "warning"
+        });
+      }
+    }
+
+    // Re-eval specific Psychologist Handoff reminder
+    if (student.isReeval && !student.reevalPsychologistHandoffDate) {
+      const handoffDue = addDays(meetingDate, -deadlines.reevalPsychHandoff);
+      if (getDaysRemaining(handoffDue) <= 0) {
+        warnings.push({
+          type: "handoff",
+          label: "Psychologist Handoff Due",
+          text: `Handoff surveys and observation notes are past due (${deadlines.reevalPsychHandoff} calendar days prior; target: ${handoffDue}).`,
+          status: "warning"
+        });
+      }
+    }
+
     return warnings;
   };
 
   // Step checklist and form content renderer
   const renderStepContent = (student, stepIndex) => {
+    if (student.isReeval) {
+      return renderReevalStepContent(student, stepIndex);
+    } else {
+      return renderIepStepContent(student, stepIndex);
+    }
+  };
+
+  const renderIepStepContent = (student, stepIndex) => {
     switch (stepIndex) {
       case 0: // August Prep
         return (
@@ -371,6 +626,11 @@ export default function IepPlanner({ students = [], updateStudent }) {
                   value={student.iepMeetingDate || ""}
                   onChange={(e) => updateStudent(student.id, { iepMeetingDate: e.target.value })}
                 />
+                {student.isReeval && isMeetingDayWarning(student.iepMeetingDate) && (
+                  <p style={{ fontSize: "11px", color: "var(--accent-rose)", fontWeight: "600", marginTop: "4px" }}>
+                    ⚠️ Warning: School psychologist only available Mondays & Thursdays.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -625,6 +885,246 @@ export default function IepPlanner({ students = [], updateStudent }) {
     }
   };
 
+  const renderReevalStepContent = (student, stepIndex) => {
+    const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
+    switch (stepIndex) {
+      case 0: // August Prep
+        return renderIepStepContent(student, 0);
+
+      case 1: // Parent Proposal
+        return renderIepStepContent(student, 1);
+
+      case 2: // Formal Invitation
+        return renderIepStepContent(student, 2);
+
+      case 3: // Teacher Checklist & Teacher Survey
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Render standard teacher checklist content */}
+            {renderIepStepContent(student, 3)}
+            
+            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px", marginTop: "4px" }}>
+              <h5 style={{ fontSize: "12px", fontWeight: "700", color: "var(--accent-purple)", marginBottom: "8px" }}>
+                Re-evaluation Teacher Survey Track
+              </h5>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ fontWeight: "600", fontSize: "12px" }}>Teacher Re-evaluation Survey</span>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: "2px 6px", fontSize: "9px", display: "block", marginTop: "4px" }}
+                    onClick={() => handleEmailTeacherSurvey(student)}
+                  >
+                    Email Request
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <label style={{ display: "inline-flex", gap: "4px", alignItems: "center", fontSize: "11px" }}>
+                    <input 
+                      type="checkbox"
+                      checked={!!student.reevalTeacherSurveyDispatched}
+                      onChange={(e) => updateStudent(student.id, { reevalTeacherSurveyDispatched: e.target.checked })}
+                    />
+                    <span>Sent</span>
+                  </label>
+                  <label style={{ display: "inline-flex", gap: "4px", alignItems: "center", fontSize: "11px" }}>
+                    <input 
+                      type="checkbox"
+                      checked={!!student.reevalTeacherSurveyReturned}
+                      onChange={(e) => updateStudent(student.id, { reevalTeacherSurveyReturned: e.target.checked })}
+                    />
+                    <strong>Returned</strong>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 4: // Re-eval Surveys (Parent & Facilitator)
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+              Send and track parent re-evaluation checklist and complete the facilitator IEP inputs.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "6px" }}>
+                <div>
+                  <span style={{ fontWeight: "600", fontSize: "12px" }}>Parent Re-evaluation Survey</span>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <label style={{ display: "inline-flex", gap: "4px", alignItems: "center", fontSize: "11px" }}>
+                    <input 
+                      type="checkbox"
+                      checked={!!student.reevalParentSurveyDispatched}
+                      onChange={(e) => updateStudent(student.id, { reevalParentSurveyDispatched: e.target.checked })}
+                    />
+                    <span>Sent</span>
+                  </label>
+                  <label style={{ display: "inline-flex", gap: "4px", alignItems: "center", fontSize: "11px" }}>
+                    <input 
+                      type="checkbox"
+                      checked={!!student.reevalParentSurveyReturned}
+                      onChange={(e) => updateStudent(student.id, { reevalParentSurveyReturned: e.target.checked })}
+                    />
+                    <strong>Returned</strong>
+                  </label>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "4px" }}>
+                <div>
+                  <span style={{ fontWeight: "600", fontSize: "12px" }}>Facilitator IEP Input Survey</span>
+                </div>
+                <label style={{ display: "inline-flex", gap: "4px", alignItems: "center", fontSize: "11px" }}>
+                  <input 
+                    type="checkbox"
+                    checked={!!student.reevalSelfSurveyCompleted}
+                    onChange={(e) => updateStudent(student.id, { reevalSelfSurveyCompleted: e.target.checked })}
+                  />
+                  <strong>Completed</strong>
+                </label>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 5: // Direct Observation
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+              Conduct a 35-minute classroom observation of the student in ELA/Math.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div style={{ padding: "12px", borderRadius: "6px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ fontSize: "24px", fontWeight: "700", fontFamily: "monospace", letterSpacing: "1px", color: isTimerRunning ? "var(--accent-purple)" : "inherit" }}>
+                  {formatTime(obsTimer)}
+                </span>
+                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: "4px 10px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px" }}
+                    onClick={() => setIsTimerRunning(!isTimerRunning)}
+                  >
+                    {isTimerRunning ? "Pause" : "Start"}
+                  </button>
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: "4px 10px", fontSize: "11px" }}
+                    onClick={() => { setIsTimerRunning(false); setObsTimer(2100); }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <textarea 
+                  className="input-field"
+                  placeholder="Type observation notes here..."
+                  value={obsNoteText}
+                  onChange={(e) => setObsNoteText(e.target.value)}
+                  style={{ height: "70px", padding: "6px", fontSize: "11px", resize: "none" }}
+                />
+                <button 
+                  className="btn btn-primary"
+                  style={{ padding: "6px", fontSize: "11px" }}
+                  onClick={() => handleLogObservationNotes(student)}
+                  disabled={!obsNoteText.trim()}
+                >
+                  Log Observation Notes
+                </button>
+                {showLogSuccess && (
+                  <span style={{ fontSize: "11px", color: "var(--accent-emerald)", fontWeight: "600", textAlign: "center" }}>
+                    ✔ Observation saved to student progress logs!
+                  </span>
+                )}
+                {student.reevalDirectObservationCompleted && (
+                  <span style={{ fontSize: "11px", color: "var(--accent-emerald)", fontWeight: "600" }}>
+                    ✔ Observation completed on {student.reevalDirectObservationDate || "Date Unset"}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 6: // Psychologist Handoff
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+              Submit ELA/Math observations and surveys to the School Psychologist at least {deadlines.reevalPsychHandoff} days before the meeting.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label>Handoff Completed Date</label>
+                <input 
+                  type="date"
+                  className="input-field"
+                  value={student.reevalPsychologistHandoffDate || ""}
+                  onChange={(e) => updateStudent(student.id, { reevalPsychologistHandoffDate: e.target.value })}
+                />
+                {student.reevalMeetingDate && (
+                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                    Handoff deadline: <strong>{addDays(student.reevalMeetingDate, -deadlines.reevalPsychHandoff)}</strong>.
+                  </p>
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {student.reevalPsychologistHandoffDate && (
+                  <div style={{ padding: "10px", borderRadius: "6px", backgroundColor: "var(--accent-emerald-light)", color: "var(--accent-emerald)", fontSize: "11px", fontWeight: "600", width: "100%" }}>
+                    ✔ Files compiled and sent to School Psychologist.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+
+      case 7: // Drafting & Delivery
+        return renderIepStepContent(student, 5);
+
+      case 8: // Meeting & Finalize
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Render standard meeting & finalize content */}
+            {renderIepStepContent(student, 6)}
+            
+            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px", marginTop: "4px" }}>
+              <h5 style={{ fontSize: "12px", fontWeight: "700", color: "var(--accent-purple)", marginBottom: "8px" }}>
+                Triennial Re-evaluation Closure
+              </h5>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center" }}>
+                <div>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ width: "100%", padding: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+                    onClick={() => handleCompleteReeval(student)}
+                  >
+                    Conclude Re-evaluation
+                  </button>
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <div style={{ color: student.reevalDirectObservationCompleted ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                    {student.reevalDirectObservationCompleted ? "✔ Observation Notes logged" : "✘ Missing Observation Notes"}
+                  </div>
+                  <div style={{ color: (student.reevalParentSurveyReturned && student.reevalTeacherSurveyReturned && student.reevalSelfSurveyCompleted) ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                    {(student.reevalParentSurveyReturned && student.reevalTeacherSurveyReturned && student.reevalSelfSurveyCompleted) ? "✔ All surveys returned" : "✘ Missing surveys"}
+                  </div>
+                  <div style={{ color: student.reevalPsychologistHandoffDate ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
+                    {student.reevalPsychologistHandoffDate ? "✔ Psychologist Handoff logged" : "✘ Missing Handoff"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
   return (
     <div>
       {/* 1. Friday Signatures Quick-Checklist Panel */}
@@ -673,14 +1173,16 @@ export default function IepPlanner({ students = [], updateStudent }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {activeStudents.map(student => {
           const isExpanded = expandedStudentId === student.id;
-          const currentStageIndex = getIepStageIndex(student);
+          const currentStages = student.isReeval ? reevalStages : iepStages;
+          const currentStageIndex = student.isReeval ? getReevalStageIndex(student) : getIepStageIndex(student);
           const warnings = getIepWarnings(student);
           
           // Compute progress percentage
-          const progressPercent = (currentStageIndex / (iepStages.length - 1)) * 100;
+          const progressPercent = (currentStageIndex / (currentStages.length - 1)) * 100;
 
           // Get selected step index in panel
-          const selectedStep = selectedStepIndexByStudent[student.id] ?? (currentStageIndex >= 7 ? 6 : currentStageIndex);
+          const maxStepIndex = currentStages.length - 1;
+          const selectedStep = selectedStepIndexByStudent[student.id] ?? (currentStageIndex >= currentStages.length ? maxStepIndex : currentStageIndex);
 
           return (
             <div 
@@ -699,13 +1201,13 @@ export default function IepPlanner({ students = [], updateStudent }) {
                 <div>
                   <h3 style={{ fontSize: "18px", fontWeight: "700", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
                     {student.name}
-                    {currentStageIndex >= 7 ? (
+                    {currentStageIndex >= currentStages.length ? (
                       <span className="badge badge-emerald" style={{ fontSize: "11px" }}>
-                        IEP Finalized
+                        {student.isReeval ? "Re-eval Finalized" : "IEP Finalized"}
                       </span>
                     ) : (
                       <span className="badge badge-purple" style={{ fontSize: "11px" }}>
-                        Stage {currentStageIndex + 1}: {iepStages[currentStageIndex]?.label}
+                        Stage {currentStageIndex + 1}: {currentStages[currentStageIndex]?.label}
                       </span>
                     )}
                   </h3>
@@ -713,11 +1215,37 @@ export default function IepPlanner({ students = [], updateStudent }) {
                     <span>Grade: <strong>{student.grade}</strong></span>
                     <span>Teacher: <strong>{student.classroomTeacher}</strong></span>
                     <span>IEP Due Date: <strong style={{ color: getDaysRemaining(student.iepDueDate) <= 30 ? "var(--accent-rose)" : "inherit" }}>{student.iepDueDate || "Not Set"}</strong></span>
-                    {student.iepMeetingDate && (
+                    {student.iepMeetingDate && !student.isReeval && (
                       <span style={{ color: "var(--accent-purple)" }}>
                         Meeting: <strong>{student.iepMeetingDate}</strong>
                       </span>
                     )}
+                    {student.reevalMeetingDate && student.isReeval && (
+                      <span style={{ color: "var(--accent-purple)" }}>
+                        Re-eval Meeting: <strong>{student.reevalMeetingDate}</strong>
+                      </span>
+                    )}
+                    <span style={{ borderLeft: "1px solid var(--border-color)", paddingLeft: "12px", display: "inline-flex", alignItems: "center" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "11px", color: "var(--accent-purple)", fontWeight: "600", margin: 0 }}>
+                        <input 
+                          type="checkbox"
+                          checked={!!student.isReeval}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            updateStudent(student.id, { 
+                              isReeval: val,
+                              reevalDueDate: student.reevalDueDate || addDays(new Date().toISOString().split("T")[0], 3 * 365)
+                            });
+                            setSelectedStepIndexByStudent(prev => ({
+                              ...prev,
+                              [student.id]: 0
+                            }));
+                          }}
+                          style={{ margin: 0 }}
+                        />
+                        <span>Re-Eval Track</span>
+                      </label>
+                    </span>
                   </div>
                 </div>
 
@@ -729,7 +1257,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                       if (!isExpanded) {
                         setSelectedStepIndexByStudent(prev => ({
                           ...prev,
-                          [student.id]: currentStageIndex >= 7 ? 6 : currentStageIndex
+                          [student.id]: currentStageIndex >= currentStages.length ? maxStepIndex : currentStageIndex
                         }));
                       }
                     }}
@@ -767,45 +1295,62 @@ export default function IepPlanner({ students = [], updateStudent }) {
 
               {/* Card Body - Horizontal Stepper */}
               <div className="pizza-tracker-wrapper">
-                <div className="pizza-tracker-container">
+                  <div className="pizza-tracker-container">
                   <div className="pizza-tracker-line-bg" />
                   <div 
                     className="pizza-tracker-line-progress" 
                     style={{ 
                       width: `calc(${progressPercent}% - 0px)`,
-                      backgroundColor: currentStageIndex >= 7 ? "var(--accent-emerald)" : "var(--accent-purple)" 
+                      backgroundColor: currentStageIndex >= currentStages.length ? "var(--accent-emerald)" : "var(--accent-purple)" 
                     }}
                   />
                   
-                  {iepStages.map((stage, idx) => {
+                  {currentStages.map((stage, idx) => {
                     const isCompleted = idx < currentStageIndex;
                     const isActive = idx === currentStageIndex;
                     
                     const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
                     // Compute step warning status for dots
                     let isWarning = false;
-                    if (student.iepMeetingDate) {
-                      if (idx === 2) {
-                        // invitation sent notice check
-                        if (student.iepInvitationSentDate && !student.meetingNoticeWaived) {
-                          const noticeDays = getCalendarDaysDiff(student.iepInvitationSentDate, student.iepMeetingDate);
-                          if (noticeDays !== null && noticeDays < deadlines.iepFormalInvitation) isWarning = true;
+                    if (student.isReeval) {
+                      if (student.reevalMeetingDate) {
+                        if (idx === 0) {
+                          if (student.reevalInvitationSentDate) {
+                            const noticeDays = getCalendarDaysDiff(student.reevalInvitationSentDate, student.reevalMeetingDate);
+                            if (noticeDays !== null && noticeDays < 10) isWarning = true;
+                          }
+                        } else if (idx === 2) {
+                          const obsDue = addDays(student.reevalMeetingDate, -deadlines.reevalObservation);
+                          if (!student.reevalDirectObservationCompleted && getDaysRemaining(obsDue) <= 0) isWarning = true;
+                        } else if (idx === 3) {
+                          const handoffDue = addDays(student.reevalMeetingDate, -deadlines.reevalPsychHandoff);
+                          if (!student.reevalPsychologistHandoffDate && getDaysRemaining(handoffDue) <= 0) isWarning = true;
                         }
-                      } else if (idx === 4) {
-                        // data gathering warnings
-                        const dataDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDataGathering);
-                        const surveyDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepTransitionSurvey);
-                        if ((!student.iepDataMiningCompleted && getDaysRemaining(dataDue) <= 0) || 
-                            (!student.iepTransitionSurveyCompleted && getDaysRemaining(surveyDue) <= 0)) {
-                          isWarning = true;
-                        }
-                      } else if (idx === 5) {
-                        // drafting warnings
-                        const draftDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftWritten);
-                        const sendDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftSent);
-                        if ((!student.iepDraftWrittenDate && getDaysRemaining(draftDue) <= 0) || 
-                            (!student.iepDraftSentDate && getDaysRemaining(sendDue) <= 0)) {
-                          isWarning = true;
+                      }
+                    } else {
+                      if (student.iepMeetingDate) {
+                        if (idx === 2) {
+                          // invitation sent notice check
+                          if (student.iepInvitationSentDate && !student.meetingNoticeWaived) {
+                            const noticeDays = getCalendarDaysDiff(student.iepInvitationSentDate, student.iepMeetingDate);
+                            if (noticeDays !== null && noticeDays < deadlines.iepFormalInvitation) isWarning = true;
+                          }
+                        } else if (idx === 4) {
+                          // data gathering warnings
+                          const dataDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDataGathering);
+                          const surveyDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepTransitionSurvey);
+                          if ((!student.iepDataMiningCompleted && getDaysRemaining(dataDue) <= 0) || 
+                              (!student.iepTransitionSurveyCompleted && getDaysRemaining(surveyDue) <= 0)) {
+                            isWarning = true;
+                          }
+                        } else if (idx === 5) {
+                          // drafting warnings
+                          const draftDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftWritten);
+                          const sendDue = addSchoolDays(student.iepMeetingDate, -deadlines.iepDraftSent);
+                          if ((!student.iepDraftWrittenDate && getDaysRemaining(draftDue) <= 0) || 
+                              (!student.iepDraftSentDate && getDaysRemaining(sendDue) <= 0)) {
+                            isWarning = true;
+                          }
                         }
                       }
                     }
@@ -829,13 +1374,13 @@ export default function IepPlanner({ students = [], updateStudent }) {
                         }}
                       >
                         <div className="pizza-tracker-dot" style={{
-                          backgroundColor: isCompleted && currentStageIndex >= 7 ? "var(--accent-emerald)" : "",
-                          borderColor: isCompleted && currentStageIndex >= 7 ? "var(--accent-emerald)" : ""
+                          backgroundColor: isCompleted && currentStageIndex >= currentStages.length ? "var(--accent-emerald)" : "",
+                          borderColor: isCompleted && currentStageIndex >= currentStages.length ? "var(--accent-emerald)" : ""
                         }}>
                           {isCompleted ? "✔" : idx + 1}
                         </div>
                         <span className="pizza-tracker-label" style={{
-                          color: isCompleted && currentStageIndex >= 7 ? "var(--accent-emerald)" : ""
+                          color: isCompleted && currentStageIndex >= currentStages.length ? "var(--accent-emerald)" : ""
                         }}>{stage.short}</span>
                         <span className={`pizza-tracker-date ${dateClass}`} style={{
                           fontSize: "10px",
@@ -854,7 +1399,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
                 <div className="timeline-card-body-expanded">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
                     <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--accent-purple)", margin: 0 }}>
-                      Workflow Step Details: {iepStages[selectedStep].label}
+                      Workflow Step Details: {currentStages[selectedStep]?.label}
                     </h4>
                   </div>
 

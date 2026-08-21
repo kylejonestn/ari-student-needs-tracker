@@ -8,16 +8,34 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
 import Students from "./components/Students";
 import ScreeningGrid from "./components/ScreeningGrid";
-import Reevaluation from "./components/Reevaluation";
 import ProgressReports from "./components/ProgressReports";
 import SelStudio from "./components/SelStudio";
 import ParentPortal from "./components/ParentPortal";
 import SettingsPanel from "./components/SettingsPanel";
 import IepPlanner from "./components/IepPlanner";
+import SyncConflictModal from "./components/SyncConflictModal";
 import { Cloud, CloudOff, RefreshCw, Check, AlertCircle } from "lucide-react";
 
 export default function App() {
   const [storeState, setStoreState] = useState(store.getState());
+
+  const {
+    theme,
+    clientId,
+    syncStatus,
+    syncError,
+    conflicts,
+    students,
+    screenings,
+    activeTab,
+    isParentMode,
+    flashingGreen,
+    accessToken,
+    tokenExpiry,
+    toastMessage,
+    toastStudentId,
+    toastQuarter
+  } = storeState;
 
   // Bind store listener
   useEffect(() => {
@@ -27,19 +45,12 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const {
-    theme,
-    clientId,
-    syncStatus,
-    syncError,
-    students,
-    screenings,
-    activeTab,
-    isParentMode,
-    flashingGreen,
-    accessToken,
-    tokenExpiry
-  } = storeState;
+  // Redirect legacy tabs
+  useEffect(() => {
+    if (activeTab === "reeval") {
+      store.updateState({ activeTab: "iep" });
+    }
+  }, [activeTab]);
 
   // Header Title Resolver
   const getPageDetails = () => {
@@ -56,8 +67,6 @@ export default function App() {
         return { title: "Screening & Placement Matrix", subtitle: "Tennessee K-12 Gifted Scoring Grid (IGAM)" };
       case "iep":
         return { title: "IEP Caseload Timeline", subtitle: "Annual IEP scheduling & checklist tracking" };
-      case "reeval":
-        return { title: "Re-evaluation Center", subtitle: "Triennial reviews & direct observation trackers" };
       case "progress":
         return { title: "Progress Reports Writer", subtitle: "Quarterly IEP goal indicators & narratives" };
       case "sel":
@@ -79,12 +88,24 @@ export default function App() {
   // Render Cloud HUD component
   const renderSyncHUD = () => {
     switch (syncStatus) {
+      case "conflict":
+        return (
+          <div 
+            className="sync-hud"
+            style={{ borderColor: "var(--accent-amber)", color: "var(--accent-amber)", cursor: "pointer" }}
+            onClick={() => store.syncToCloud()}
+            title="Data conflicts detected between local cache and Google Drive. Click to resolve."
+          >
+            <AlertCircle size={14} color="var(--accent-amber)" />
+            <span>Sync Conflict</span>
+          </div>
+        );
       case "synced":
         return (
           <div 
             className={`sync-hud synced ${flashingGreen ? "flash-green" : ""}`}
-            onClick={() => store.syncFromGoogleDrive()}
-            title="Database synced with Google Drive. Click to force pull."
+            onClick={() => store.syncToCloud()}
+            title="Database synced with Google Drive. Click to sync and merge."
           >
             <Check size={14} />
             <span>Synced</span>
@@ -206,12 +227,6 @@ export default function App() {
                   updateStudent={(id, fields) => store.updateStudent(id, fields)}
                 />
               )}
-              {activeTab === "reeval" && (
-                <Reevaluation
-                  students={students}
-                  updateStudent={(id, fields) => store.updateStudent(id, fields)}
-                />
-              )}
               {activeTab === "progress" && (
                 <ProgressReports
                   students={students}
@@ -243,6 +258,57 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Cloud Sync Conflict Modal */}
+      {syncStatus === "conflict" && storeState.conflicts && storeState.conflicts.length > 0 && (
+        <SyncConflictModal
+          conflicts={storeState.conflicts}
+          onResolve={(conflictList, resolveAllNewest) => {
+            store.applyResolution(conflictList || storeState.conflicts, resolveAllNewest);
+          }}
+          onCancel={() => {
+            store.updateState({ syncStatus: "synced", conflicts: [], mergedData: null });
+          }}
+        />
+      )}
+
+      {/* Global Toast Notification */}
+      {toastMessage && (
+        <div 
+          onClick={() => {
+            store.updateState({
+              activeTab: "progress",
+              selectedProgressStudentId: toastStudentId,
+              selectedProgressQuarter: toastQuarter,
+              toastMessage: "",
+              toastStudentId: null,
+              toastQuarter: null
+            });
+          }}
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            right: "20px",
+            backgroundColor: "var(--accent-purple)",
+            color: "#fff",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            zIndex: 9999,
+            fontSize: "13px",
+            fontWeight: "600",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            cursor: "pointer"
+          }}
+          title="Click to jump to this progress report"
+        >
+          <span style={{ fontSize: "14px" }}>📬</span>
+          <span>{toastMessage}</span>
+          <span style={{ fontSize: "10.5px", opacity: 0.7, marginLeft: "4px" }}>(Click to view)</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -179,6 +179,167 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
     handleFinalizePlacementForStudent(activeScreening);
   };
 
+  const calculatePerformancePoints = (student) => {
+    const inst = student.academicInstrument || "T-VAAS";
+    
+    if (inst === "TN Supplementary Gifted Checklist") {
+      const val = parseFloat(student.tnSupScore) || 0;
+      if (val <= 12) {
+        if (val >= 9) return 30;
+        if (val >= 8) return 20;
+        if (val >= 7) return 10;
+        return 0;
+      } else {
+        if (val >= 95) return 10;
+        if (val >= 90) return 10;
+        return 0;
+      }
+    }
+
+    const isTvaas = inst === "T-VAAS";
+    
+    // Check if sub-scores are filled out
+    const hasTvaasSubscores = student.tvaasElaScore || student.tvaasMathScore || student.tvaasSciScore || student.tvaasSSTScore;
+    const hasWjSubscores = student.wjReadingScore || student.wjLangScore || student.wjMathScore || student.wjKnowledgeScore || student.wjAppsScore;
+
+    if (!hasTvaasSubscores && !hasWjSubscores) {
+      // Legacy single-score fallback
+      const legacyScore = parseFloat(student.matrix?.performance?.score) || 0;
+      return legacyScore >= 99 ? 25 : legacyScore >= 96 ? 20 : legacyScore >= 90 ? 15 : legacyScore >= 85 ? 10 : legacyScore >= 80 ? 5 : 0;
+    }
+
+    let areas95 = 0;
+    let areas90 = 0;
+
+    if (isTvaas) {
+      const ela = parseFloat(student.tvaasElaScore) || 0;
+      const math = parseFloat(student.tvaasMathScore) || 0;
+      const sci = parseFloat(student.tvaasSciScore) || 0;
+      const ss = parseFloat(student.tvaasSSTScore) || 0;
+
+      [ela, math, sci, ss].forEach(score => {
+        if (score >= 95) areas95++;
+        if (score >= 90) areas90++;
+      });
+    } else {
+      const reading = parseFloat(student.wjReadingScore) || 0;
+      const lang = parseFloat(student.wjLangScore) || 0;
+      const math = parseFloat(student.wjMathScore) || 0;
+      const knowledge = parseFloat(student.wjKnowledgeScore) || 0;
+      const apps = parseFloat(student.wjAppsScore) || 0;
+
+      [reading, lang, math, knowledge, apps].forEach(score => {
+        if (score >= 95) areas95++;
+        if (score >= 90) areas90++;
+      });
+    }
+
+    if (areas95 >= 3 || areas90 >= 4) {
+      return 30;
+    } else if (areas95 >= 2 || areas90 >= 3) {
+      return 20;
+    } else if (areas95 >= 1 || areas90 >= 2) {
+      return 10;
+    }
+    return 0;
+  };
+
+  const handleSubScoreChange = (student, updatedFields) => {
+    const tempStudent = { ...student, ...updatedFields };
+    const points = calculatePerformancePoints(tempStudent);
+    
+    // Build score summary text
+    let summaryText = "";
+    const inst = tempStudent.academicInstrument || "T-VAAS";
+    if (inst === "T-VAAS") {
+      summaryText = `T-VAAS: ELA ${tempStudent.tvaasElaScore || 0}%, Math ${tempStudent.tvaasMathScore || 0}%, Sci ${tempStudent.tvaasSciScore || 0}%, SS ${tempStudent.tvaasSSTScore || 0}%`;
+    } else if (inst === "Woodcock-Johnson") {
+      summaryText = `WJ: Reading ${tempStudent.wjReadingScore || 0}%, Lang ${tempStudent.wjLangScore || 0}%, Math ${tempStudent.wjMathScore || 0}%, Know ${tempStudent.wjKnowledgeScore || 0}%, Apps ${tempStudent.wjAppsScore || 0}%`;
+    } else {
+      summaryText = `TN Sup: Score ${tempStudent.tnSupScore || 0}`;
+    }
+
+    const newMatrix = { ...student.matrix };
+    newMatrix.performance = {
+      instrument: inst,
+      score: summaryText,
+      points
+    };
+
+    updateScreening(student.id, {
+      ...updatedFields,
+      matrix: newMatrix
+    });
+  };
+
+  const handleAutofillTvaasDates = (student) => {
+    const firstDate = student.tvaasElaDate || "";
+    handleSubScoreChange(student, {
+      tvaasMathDate: firstDate,
+      tvaasSciDate: firstDate,
+      tvaasSSDate: firstDate
+    });
+  };
+
+  const handleAutofillWjDates = (student) => {
+    const firstDate = student.wjReadingDate || "";
+    handleSubScoreChange(student, {
+      wjLangDate: firstDate,
+      wjMathDate: firstDate,
+      wjKnowledgeDate: firstDate,
+      wjAppsDate: firstDate
+    });
+  };
+
+  const calculateCreativityPoints = (rawInst, valStr) => {
+    const val = parseFloat(valStr) || 0;
+    let inst = rawInst || "TnTOC";
+    if (inst === "TN TOL") inst = "TnTOC";
+    if (inst === "TN TOL Plus") inst = "TnTOC+";
+    if (inst === "TN Create") inst = "TnCreat";
+    if (inst === "Torrance") inst = "TTCT";
+
+    if (inst === "TTCT") {
+      if (val >= 94) return 30;
+      if (val >= 90) return 20;
+      if (val >= 84) return 10;
+    } else if (inst === "TnTOC") {
+      if (val >= 22) return 30;
+      if (val >= 19) return 20;
+      if (val >= 16) return 10;
+    } else if (inst === "TnTOC+") {
+      if (val >= 29) return 30;
+      if (val >= 25) return 20;
+      if (val >= 21) return 10;
+    } else if (inst === "TnCreat") {
+      if (val >= 50) return 30;
+      if (val >= 45) return 20;
+      if (val >= 40) return 10;
+    }
+    return 0;
+  };
+
+  const handleCreativityScoreChange = (student, updatedFields) => {
+    const tempStudent = { ...student, ...updatedFields };
+    const inst = tempStudent.creativityInstrument || "TnTOC";
+    const scoreVal = tempStudent.matrix?.creativity?.score !== undefined ? tempStudent.matrix.creativity.score : "";
+    const updatedScore = updatedFields.creativityScore !== undefined ? updatedFields.creativityScore : scoreVal;
+
+    const points = calculateCreativityPoints(inst, updatedScore);
+
+    const newMatrix = { ...student.matrix };
+    newMatrix.creativity = {
+      instrument: inst,
+      score: updatedScore,
+      points
+    };
+
+    updateScreening(student.id, {
+      ...updatedFields,
+      matrix: newMatrix
+    });
+  };
+
   const handleNudgeForStudent = (student) => {
     if (!student) return;
     const email = store.getState().workEmail || "ariel.facilitator@rcschools.net";
@@ -429,24 +590,309 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
                     >
                       <option value="T-VAAS">T-VAAS Benchmark</option>
                       <option value="Woodcock-Johnson">Woodcock-Johnson (Direct)</option>
+                      <option value="TN Supplementary Gifted Checklist">TN Supplementary Gifted Checklist</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>Test Score / Percentile</label>
-                    <input 
-                      type="number"
-                      className="input-field"
-                      placeholder="e.g. 98"
-                      value={student.matrix?.performance?.score || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        const points = val >= 99 ? 25 : val >= 96 ? 20 : val >= 90 ? 15 : val >= 85 ? 10 : val >= 80 ? 5 : 0;
-                        const newMatrix = { ...student.matrix };
-                        newMatrix.performance = { instrument: student.academicInstrument, score: val, points };
-                        updateScreening(student.id, { matrix: newMatrix });
-                      }}
-                    />
-                  </div>
+                  {/* T-VAAS Sub-Scores */}
+                  {(student.academicInstrument || "T-VAAS") === "T-VAAS" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase" }}>T-VAAS Sub-Test</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>ELA %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.tvaasElaScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasElaScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>ELA Date</label>
+                          <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              placeholder="MM/DD/YY" 
+                              value={student.tvaasElaDate || ""} 
+                              onChange={(e) => handleSubScoreChange(student, { tvaasElaDate: e.target.value })} 
+                              style={{ paddingRight: "60px", width: "100%" }}
+                            />
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ 
+                                position: "absolute", 
+                                right: "2px", 
+                                top: "2px", 
+                                bottom: "2px", 
+                                padding: "0 6px", 
+                                fontSize: "9px", 
+                                height: "calc(100% - 4px)", 
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                cursor: "pointer"
+                              }} 
+                              onClick={() => handleAutofillTvaasDates(student)}
+                              title="Autofill all dates with ELA Date"
+                              type="button"
+                            >
+                              ⬇ Fill
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Math %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.tvaasMathScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasMathScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Math Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.tvaasMathDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasMathDate: e.target.value })} 
+                            tabIndex={student.tvaasMathDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Science %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.tvaasSciScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasSciScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Sci Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.tvaasSciDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasSciDate: e.target.value })} 
+                            tabIndex={student.tvaasSciDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Social Studies %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.tvaasSSTScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasSSTScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>SS Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.tvaasSSDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tvaasSSDate: e.target.value })} 
+                            tabIndex={student.tvaasSSDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {student.academicInstrument === "Woodcock-Johnson" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center" }}>
+                        <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase" }}>WJ Sub-Test</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Reading %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.wjReadingScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjReadingScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Reading Date</label>
+                          <div style={{ position: "relative", display: "flex", alignItems: "center", width: "100%" }}>
+                            <input 
+                              type="text" 
+                              className="input-field" 
+                              placeholder="MM/DD/YY" 
+                              value={student.wjReadingDate || ""} 
+                              onChange={(e) => handleSubScoreChange(student, { wjReadingDate: e.target.value })} 
+                              style={{ paddingRight: "60px", width: "100%" }}
+                            />
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ 
+                                position: "absolute", 
+                                right: "2px", 
+                                top: "2px", 
+                                bottom: "2px", 
+                                padding: "0 6px", 
+                                fontSize: "9px", 
+                                height: "calc(100% - 4px)", 
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                cursor: "pointer"
+                              }} 
+                              onClick={() => handleAutofillWjDates(student)}
+                              title="Autofill all dates with Reading Date"
+                              type="button"
+                            >
+                              ⬇ Fill
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Written Exp %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.wjLangScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjLangScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Lang Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.wjLangDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjLangDate: e.target.value })} 
+                            tabIndex={student.wjLangDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Math %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.wjMathScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjMathScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Math Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.wjMathDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjMathDate: e.target.value })} 
+                            tabIndex={student.wjMathDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Academic Knowledge</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.wjKnowledgeScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjKnowledgeScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Knowledge Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.wjKnowledgeDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjKnowledgeDate: e.target.value })} 
+                            tabIndex={student.wjKnowledgeDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Academic Apps</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 95" 
+                            value={student.wjAppsScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjAppsScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Apps Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.wjAppsDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { wjAppsDate: e.target.value })} 
+                            tabIndex={student.wjAppsDate ? -1 : 0}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TN Supplementary Gifted Checklist Sub-Scores */}
+                  {student.academicInstrument === "TN Supplementary Gifted Checklist" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <span style={{ fontSize: "11px", fontWeight: "600", textTransform: "uppercase" }}>TN Supplementary Checklist</span>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Checklist Score (0-12) or %ile</label>
+                          <input 
+                            type="number" 
+                            className="input-field" 
+                            placeholder="e.g. 7" 
+                            value={student.tnSupScore || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tnSupScore: e.target.value })} 
+                          />
+                        </div>
+                        <div className="form-group" style={{ margin: 0 }}>
+                          <label style={{ fontSize: "10px", color: "var(--text-muted)", marginBottom: "2px" }}>Test Date</label>
+                          <input 
+                            type="text" 
+                            className="input-field" 
+                            placeholder="MM/DD/YY" 
+                            value={student.tnSupDate || ""} 
+                            onChange={(e) => handleSubScoreChange(student, { tnSupDate: e.target.value })} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
                     <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>TN Matrix Rubric Points:</span>
                     <span style={{ fontSize: "16px", fontWeight: "700", color: performancePts >= 10 ? "var(--accent-emerald)" : "var(--accent-rose)" }}>
@@ -468,36 +914,40 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
                     <label>Creativity Assessment</label>
                     <select 
                       className="select-field"
-                      value={student.creativityInstrument || "TN TOL"}
-                      onChange={(e) => updateScreening(student.id, { creativityInstrument: e.target.value })}
+                      value={student.creativityInstrument || "TnTOC"}
+                      onChange={(e) => handleCreativityScoreChange(student, { creativityInstrument: e.target.value })}
                     >
-                      <option value="TN TOL">TN TOL Checklist</option>
-                      <option value="TN TOL Plus">TN TOL Plus (with Parent Input)</option>
-                      <option value="TN Create">TN Create (Raw score)</option>
-                      <option value="Torrance">Torrance Test of Creativity (County Grade)</option>
+                      <option value="TTCT">Torrance Test of Creativity (TTCT)</option>
+                      <option value="TnTOC">TnTOC Checklist</option>
+                      <option value="TnTOC+">TnTOC+ Checklist (with Parent Input)</option>
+                      <option value="TnCreat">TnCreat (Raw score)</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>Assessment Score</label>
-                    <input 
-                      type="number"
-                      className="input-field"
-                      placeholder={student.creativityInstrument === "TN Create" ? "Raw Score (need 42+)" : "e.g. 95"}
-                      value={student.matrix?.creativity?.score || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        let points = 0;
-                        const inst = student.creativityInstrument;
-                        if (inst === "TN Create") {
-                          points = val >= 42 ? 10 : 0;
-                        } else {
-                          points = val >= 99 ? 25 : val >= 96 ? 20 : val >= 90 ? 15 : val >= 85 ? 10 : val >= 80 ? 5 : 0;
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label>Assessment Score</label>
+                      <input 
+                        type="number"
+                        className="input-field"
+                        placeholder={
+                          student.creativityInstrument === "TTCT" ? "e.g. 95" : 
+                          student.creativityInstrument === "TnCreat" ? "e.g. 45" : 
+                          "e.g. 18"
                         }
-                        const newMatrix = { ...student.matrix };
-                        newMatrix.creativity = { instrument: inst, score: val, points };
-                        updateScreening(student.id, { matrix: newMatrix });
-                      }}
-                    />
+                        value={student.matrix?.creativity?.score || ""}
+                        onChange={(e) => handleCreativityScoreChange(student, { creativityScore: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label>Test Date</label>
+                      <input 
+                        type="text"
+                        className="input-field"
+                        placeholder="MM/DD/YY"
+                        value={student.creativityDate || ""}
+                        onChange={(e) => handleCreativityScoreChange(student, { creativityDate: e.target.value })}
+                      />
+                    </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
                     <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>TN Matrix Rubric Points:</span>
@@ -505,24 +955,24 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
                       {creativityPts} Pts
                     </span>
                   </div>
-                  {student.creativityInstrument === "TN TOL" && creativityPts < 10 && student.matrix?.creativity?.score !== "" && (
-                    <p style={{ fontSize: "10px", color: "var(--accent-amber)", fontWeight: "600" }}>
-                      ℹ TOL &lt; 10. Switch to <strong>TN TOL Plus</strong> to include parent survey.
+                  {(student.creativityInstrument === "TnTOC" || student.creativityInstrument === "TN TOL") && creativityPts < 10 && student.matrix?.creativity?.score !== "" && (
+                    <p style={{ fontSize: "10px", color: "var(--accent-amber)", fontWeight: "600", margin: 0 }}>
+                      ℹ TnTOC &lt; 10. Switch to <strong>TnTOC+</strong> to include parent survey.
                     </p>
                   )}
-                  {student.creativityInstrument === "TN TOL Plus" && creativityPts < 10 && student.matrix?.creativity?.score !== "" && (
-                    <p style={{ fontSize: "10px", color: "var(--accent-amber)", fontWeight: "600" }}>
-                      ℹ TOL Plus &lt; 10. Administer <strong>TN Create</strong> or <strong>Torrance</strong>.
+                  {(student.creativityInstrument === "TnTOC+" || student.creativityInstrument === "TN TOL Plus") && creativityPts < 10 && student.matrix?.creativity?.score !== "" && (
+                    <p style={{ fontSize: "10px", color: "var(--accent-amber)", fontWeight: "600", margin: 0 }}>
+                      ℹ TnTOC+ &lt; 10. Administer <strong>TnCreat</strong> or <strong>TTCT (Torrance)</strong>.
                     </p>
                   )}
-                  {student.creativityInstrument === "TN Create" && (
-                    <p style={{ fontSize: "10px", color: "var(--text-muted)" }}>
-                      Requires a raw score of <strong>42</strong> or higher to qualify for 10 matrix points.
+                  {(student.creativityInstrument === "TnCreat" || student.creativityInstrument === "TN Create") && (
+                    <p style={{ fontSize: "10px", color: "var(--text-muted)", margin: 0 }}>
+                      Requires <strong>40-44</strong> raw for 10pts, <strong>45-49</strong> for 20pts, <strong>50+</strong> for 30pts.
                     </p>
                   )}
-                  {student.creativityInstrument === "Torrance" && (
-                    <div style={{ padding: "6px", backgroundColor: "var(--accent-rose-light)", borderRadius: "4px", fontSize: "10px", color: "var(--accent-rose)", fontWeight: "600" }}>
-                      ⚠️ Sent to county. Factoring 1.5-week grading lag.
+                  {(student.creativityInstrument === "TTCT" || student.creativityInstrument === "Torrance") && (
+                    <div style={{ padding: "6px", backgroundColor: "var(--accent-rose-light)", borderRadius: "4px", fontSize: "10px", color: "var(--accent-rose)", fontWeight: "600", margin: 0 }}>
+                      ⚠️ TTCT requires <strong>84-89%ile</strong> for 10pts, <strong>90-93%ile</strong> for 20pts, <strong>94+%ile</strong> for 30pts. Sent to county (grading lag applies).
                     </div>
                   )}
                 </div>
@@ -746,7 +1196,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
               <h4 style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>Final Eligibility Scoring Audit</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px", fontSize: "12px", marginBottom: "12px" }}>
                 <div>IQ Score: <strong>{student.psychIqScore}</strong> ({cognitionPts} pts)</div>
-                <div>Achievement: <strong>{student.matrix?.performance?.score}%ile</strong> ({performancePts} pts)</div>
+                <div>Achievement: <strong style={{ fontSize: (typeof student.matrix?.performance?.score === "string" && student.matrix?.performance?.score.includes(":") ? "10px" : "inherit") }}>{student.matrix?.performance?.score}{typeof student.matrix?.performance?.score === "number" || (!isNaN(student.matrix?.performance?.score) && student.matrix?.performance?.score !== "") ? "%ile" : ""}</strong> ({performancePts} pts)</div>
                 <div>Creativity: <strong>{student.matrix?.creativity?.score}</strong> ({creativityPts} pts)</div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
