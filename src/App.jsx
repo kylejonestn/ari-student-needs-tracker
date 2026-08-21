@@ -14,7 +14,7 @@ import ParentPortal from "./components/ParentPortal";
 import SettingsPanel from "./components/SettingsPanel";
 import IepPlanner from "./components/IepPlanner";
 import SyncConflictModal from "./components/SyncConflictModal";
-import { Cloud, CloudOff, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { Cloud, CloudOff, RefreshCw, Check, AlertCircle, X } from "lucide-react";
 
 export default function App() {
   const [storeState, setStoreState] = useState(store.getState());
@@ -33,6 +33,8 @@ export default function App() {
     accessToken,
     tokenExpiry,
     toastMessage,
+    toastType,
+    hasUndoBackup,
     toastStudentId,
     toastQuarter
   } = storeState;
@@ -275,38 +277,98 @@ export default function App() {
       {/* Global Toast Notification */}
       {toastMessage && (
         <div 
-          onClick={() => {
-            store.updateState({
-              activeTab: "progress",
-              selectedProgressStudentId: toastStudentId,
-              selectedProgressQuarter: toastQuarter,
-              toastMessage: "",
-              toastStudentId: null,
-              toastQuarter: null
-            });
-          }}
           style={{
             position: "fixed",
-            bottom: "20px",
-            right: "20px",
-            backgroundColor: "var(--accent-purple)",
-            color: "#fff",
-            padding: "12px 20px",
-            borderRadius: "8px",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            bottom: "24px",
+            right: "24px",
+            backgroundColor: "var(--bg-sidebar)",
+            color: "var(--text-heading)",
+            border: "1px solid rgba(168, 85, 247, 0.4)",
+            padding: "12px 18px",
+            borderRadius: "12px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.35)",
             zIndex: 9999,
             fontSize: "13px",
-            fontWeight: "600",
+            fontWeight: "500",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
-            cursor: "pointer"
+            gap: "12px",
+            maxWidth: "520px"
           }}
-          title="Click to jump to this progress report"
         >
-          <span style={{ fontSize: "14px" }}>📬</span>
-          <span>{toastMessage}</span>
-          <span style={{ fontSize: "10.5px", opacity: 0.7, marginLeft: "4px" }}>(Click to view)</span>
+          <span style={{ fontSize: "16px", flexShrink: 0 }}>
+            {toastType === "sync" ? "☁️" : (toastStudentId ? "📬" : "ℹ️")}
+          </span>
+
+          <div style={{ flexGrow: 1, lineHeight: "1.4" }}>
+            <span>{toastMessage}</span>
+            {toastStudentId && (
+              <button
+                type="button"
+                onClick={() => {
+                  store.updateState({
+                    activeTab: "progress",
+                    selectedProgressStudentId: toastStudentId,
+                    selectedProgressQuarter: toastQuarter,
+                    toastMessage: "",
+                    toastStudentId: null,
+                    toastQuarter: null
+                  });
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--accent-purple)",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  marginLeft: "6px",
+                  padding: 0
+                }}
+              >
+                View Report
+              </button>
+            )}
+          </div>
+
+          {hasUndoBackup && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => store.undoLastSync()}
+              style={{
+                padding: "4px 10px",
+                fontSize: "11.5px",
+                fontWeight: "700",
+                color: "var(--accent-amber)",
+                borderColor: "rgba(245, 158, 11, 0.4)",
+                backgroundColor: "rgba(245, 158, 11, 0.1)",
+                flexShrink: 0
+              }}
+              title="Undo this sync and revert local data"
+            >
+              Undo
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => store.updateState({ toastMessage: "", toastStudentId: null, toastQuarter: null, hasUndoBackup: false })}
+            style={{
+              background: "none",
+              border: "none",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              padding: "2px",
+              display: "flex",
+              alignItems: "center",
+              flexShrink: 0
+            }}
+            title="Dismiss"
+          >
+            <X size={15} />
+          </button>
         </div>
       )}
     </div>

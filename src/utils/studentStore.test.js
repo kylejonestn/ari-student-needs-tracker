@@ -237,3 +237,57 @@ describe("studentStore mutation timestamps", () => {
     assert.ok(store.state.students[1].updatedAt > "2026-01-01T00:00:00.000Z");
   });
 });
+
+describe("Smart Cloud Sync - Undo & Preservation", () => {
+  it("should preserve newly created local student during merge and record localAdded stat", () => {
+    const store = new StudentStore();
+    const localData = {
+      students: [
+        { id: "stu-cloud", name: "Existing Cloud Student", grade: "6th" },
+        { id: "stu-new-local", name: "Newly Added Local Student", grade: "7th" }
+      ],
+      screenings: []
+    };
+    const cloudData = {
+      students: [
+        { id: "stu-cloud", name: "Existing Cloud Student", grade: "6th" }
+      ],
+      screenings: []
+    };
+
+    const { merged, conflicts, stats } = store.mergeWithCloud(localData, cloudData);
+
+    assert.equal(conflicts.length, 0);
+    assert.equal(merged.students.length, 2);
+    assert.ok(merged.students.some(s => s.id === "stu-new-local"), "Local student must be preserved");
+    assert.equal(stats.localAdded, 1);
+  });
+
+  it("should undo last sync and restore pre-sync snapshot", () => {
+    const store = new StudentStore();
+    store.state.students = [
+      { id: "stu-local-orig", name: "Original Local Student", grade: "6th" }
+    ];
+
+    // Simulate saving pre-sync backup
+    store.lastSyncBackup = {
+      students: JSON.parse(JSON.stringify(store.state.students)),
+      screenings: [],
+      timestamp: Date.now()
+    };
+
+    // Simulate cloud sync overwriting state with remote data
+    store.state.students = [
+      { id: "stu-remote-1", name: "Remote Student", grade: "8th" }
+    ];
+
+    // Trigger Undo
+    store.undoLastSync();
+
+    assert.equal(store.state.students.length, 1);
+    assert.equal(store.state.students[0].id, "stu-local-orig");
+    assert.equal(store.state.students[0].name, "Original Local Student");
+    assert.equal(store.state.hasUndoBackup, false);
+  });
+});
+

@@ -976,6 +976,7 @@ export class StudentStore {
   mergeWithCloud(localData, cloudData) {
     const merged = {};
     const conflicts = [];
+    const stats = { localAdded: 0, cloudAdded: 0, identical: 0, conflicted: 0 };
 
     // Helper to merge entity collections (students, screenings)
     const mergeEntities = (key) => {
@@ -995,8 +996,9 @@ export class StudentStore {
       localArr.forEach(localItem => {
         const cloudItem = cloudMap.get(localItem.id);
         if (!cloudItem) {
-          // Local only
+          // Local only -> preserve in merged dataset
           result.push(localItem);
+          stats.localAdded++;
         } else {
           const localTime = new Date(localItem.updatedAt || 0).getTime();
           const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
@@ -1008,6 +1010,7 @@ export class StudentStore {
           if (isContentIdentical) {
             // Identical content: keep the one with newer updatedAt
             result.push(localTime >= cloudTime ? localItem : cloudItem);
+            stats.identical++;
           } else {
             // Content differs between local and cloud -> conflict
             conflicts.push({
@@ -1018,6 +1021,7 @@ export class StudentStore {
               cloud: cloudItem,
               keep: localTime >= cloudTime ? "local" : "cloud"
             });
+            stats.conflicted++;
             result.push(localTime >= cloudTime ? localItem : cloudItem);
           }
           cloudMap.delete(localItem.id);
@@ -1027,6 +1031,7 @@ export class StudentStore {
       // Add cloud-only entities
       cloudMap.forEach(cloudItem => {
         result.push(cloudItem);
+        stats.cloudAdded++;
       });
 
       merged[key] = result;
@@ -1044,11 +1049,18 @@ export class StudentStore {
     merged.deadlines = { ...DEFAULT_DEADLINES, ...(localData.deadlines || {}), ...(cloudData.deadlines || {}) };
     merged.holidays = (cloudData.holidays && cloudData.holidays.length > 0) ? cloudData.holidays : (localData.holidays || DEFAULT_HOLIDAYS);
 
-    return { merged, conflicts };
+    return { merged, conflicts, stats };
   }
 
   // Apply resolution from conflict modal
   applyResolution(conflicts, resolveAllNewest = false) {
+    // Save snapshot for Undo
+    this.lastSyncBackup = {
+      students: JSON.parse(JSON.stringify(this.state.students)),
+      screenings: JSON.parse(JSON.stringify(this.state.screenings)),
+      timestamp: Date.now()
+    };
+
     let currentStudents = [...this.state.students];
     let currentScreenings = [...this.state.screenings];
 
@@ -1085,7 +1097,10 @@ export class StudentStore {
       syncStatus: "synced",
       conflicts: [],
       mergedData: null,
-      flashingGreen: true
+      flashingGreen: true,
+      toastMessage: `Resolved ${(conflicts || []).length} sync conflict(s) & updated Google Drive.`,
+      toastType: "sync",
+      hasUndoBackup: true
     });
 
     setTimeout(() => this.updateState({ flashingGreen: false }), 800);
@@ -1112,17 +1127,23 @@ export class StudentStore {
         this.updateState({ aegisFolderId: folderId });
       }
 
-      const fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+      let fileId = this.state.allDataFileId || await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
       if (!fileId) {
         // No cloud file exists yet -> save current state as cloud master
         this.triggerCloudSave();
-        this.updateState({ syncStatus: "synced", flashingGreen: true });
+        this.updateState({
+          syncStatus: "synced",
+          flashingGreen: true,
+          toastMessage: "Google Drive connected: Caseload uploaded.",
+          toastType: "sync",
+          hasUndoBackup: false
+        });
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
-        return { merged: this.state, conflicts: [] };
+        return { merged: this.state, conflicts: [], stats: { localAdded: 0, cloudAdded: 0 } };
       }
 
       const cloudData = await driveService.readFile(this.state.accessToken, fileId);
-      const { merged, conflicts } = this.mergeWithCloud(this.state, cloudData);
+      const { merged, conflicts, stats } = this.mergeWithCloud(this.state, cloudData);
 
       if (conflicts && conflicts.length > 0) {
         this.updateState({
@@ -1130,11 +1151,30 @@ export class StudentStore {
           conflicts,
           mergedData: merged
         });
-        return { merged, conflicts };
+        return { merged, conflicts, stats };
+      }
+
+      // Save pre-sync backup for instant Undo
+      this.lastSyncBackup = {
+        students: JSON.parse(JSON.stringify(this.state.students)),
+        screenings: JSON.parse(JSON.stringify(this.state.screenings)),
+        timestamp: Date.now()
+      };
+
+      // Determine friendly notification message
+      let syncMessage = "Cloud Sync complete: Database is up to date.";
+      if (stats.localAdded > 0 && stats.cloudAdded > 0) {
+        syncMessage = `Synced: Added ${stats.localAdded} local record(s) and pulled ${stats.cloudAdded} cloud update(s).`;
+      } else if (stats.localAdded > 0) {
+        syncMessage = `Synced: Uploaded ${stats.localAdded} new local profile(s) to Google Drive.`;
+      } else if (stats.cloudAdded > 0) {
+        syncMessage = `Synced: Pulled ${stats.cloudAdded} new profile(s) from Google Drive.`;
       }
 
       // No conflicts -> apply merged data and immediately update cloud
       this.updateState({
+        allDataFileId: fileId,
+        aegisFolderId: folderId,
         students: merged.students || this.state.students,
         screenings: merged.screenings || this.state.screenings,
         workEmail: merged.workEmail || this.state.workEmail,
@@ -1147,128 +1187,55 @@ export class StudentStore {
         syncStatus: "synced",
         conflicts: [],
         mergedData: null,
-        flashingGreen: true
+        flashingGreen: true,
+        toastMessage: syncMessage,
+        toastType: "sync",
+        hasUndoBackup: stats.localAdded > 0 || stats.cloudAdded > 0 || stats.conflicted > 0
       });
 
       setTimeout(() => this.updateState({ flashingGreen: false }), 800);
 
       this.triggerCloudSave();
-      return { merged, conflicts: [] };
+      return { merged, conflicts: [], stats };
     } catch (err) {
       console.error(err);
       this.updateState({ syncStatus: "error", syncError: `Cloud Sync Failed: ${err.message}` });
     }
   }
 
+  // Backwards compatibility alias: ALL sync operations route through smart 2-way merge
   async syncFromGoogleDrive() {
-    if (!this.isTokenValid()) {
-      this.connectGoogleDrive();
+    return this.syncToCloud();
+  }
+
+  // Undo last sync action and restore pre-sync snapshot
+  undoLastSync() {
+    if (!this.lastSyncBackup) {
+      this.updateState({ toastMessage: "No previous sync available to undo.", toastType: "info", hasUndoBackup: false });
       return;
     }
 
-    try {
-      this.updateState({ syncStatus: "connecting" });
-      
-      // 1. Find or create the Aegis folder
-      let folderId = this.state.aegisFolderId || localStorage.getItem("aegis_folder_id");
-      if (!folderId) {
-        folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
-        if (!folderId) {
-          folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
-        }
-        this.updateState({ aegisFolderId: folderId });
-      }
+    const { students, screenings } = this.lastSyncBackup;
+    this.lastSyncBackup = null;
 
-      // 2. Search for all-data.json inside Aegis folder
-      let fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
-      
-      if (fileId) {
-        // Load existing database
-        const cloudData = await driveService.readFile(this.state.accessToken, fileId);
-        
-        // Find parent portal file ID to populate parentPortalFileId in state
-        let parentFileId = this.state.parentPortalFileId || localStorage.getItem("aegis_parent_fid");
-        if (!parentFileId) {
-          parentFileId = await driveService.findFile(this.state.accessToken, "parent-portal.json", folderId);
-        }
-        
-        this.updateState({
-          allDataFileId: fileId,
-          parentPortalFileId: parentFileId || null,
-          aegisFolderId: folderId,
-          students: (cloudData.students || []).map(student => {
-            if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
-              student.iepDueDate = student.iepReviewDate;
-              delete student.iepReviewDate;
-            }
-            return student;
-          }),
-          screenings: cloudData.screenings || [],
-          workEmail: cloudData.workEmail || this.state.workEmail || "ariel.facilitator@rcschools.net",
-          emailAlertsEnabled: cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : this.state.emailAlertsEnabled,
-          calendarSyncEnabled: cloudData.calendarSyncEnabled !== undefined ? cloudData.calendarSyncEnabled : this.state.calendarSyncEnabled,
-          teacherEmails: cloudData.teacherEmails || this.state.teacherEmails || {
-            "Ms. Davis": "davis@rcschools.net",
-            "Mrs. Harrison": "harrison@rcschools.net",
-            "Mr. Thompson": "thompson@rcschools.net",
-            "Mr. Adams": "adams@rcschools.net"
-          },
-          reportCardDates: cloudData.reportCardDates || this.state.reportCardDates || DEFAULT_REPORT_CARD_DATES,
-          deadlines: cloudData.deadlines || this.state.deadlines || DEFAULT_DEADLINES,
-          holidays: cloudData.holidays || this.state.holidays || DEFAULT_HOLIDAYS,
-          syncStatus: "synced",
-          flashingGreen: true
-        });
- 
-        // Save parameters back to local storage
-        localStorage.setItem("aegis_work_email", this.state.workEmail);
-        localStorage.setItem("aegis_email_alerts", this.state.emailAlertsEnabled ? "true" : "false");
-        localStorage.setItem("aegis_calendar_sync", this.state.calendarSyncEnabled ? "true" : "false");
-        localStorage.setItem("aegis_teacher_emails", JSON.stringify(this.state.teacherEmails));
-        localStorage.setItem("aegis_report_card_dates", JSON.stringify(this.state.reportCardDates));
-        localStorage.setItem("aegis_deadlines", JSON.stringify(this.state.deadlines));
-        localStorage.setItem("aegis_holidays", JSON.stringify(this.state.holidays));
-        
-        setTimeout(() => this.updateState({ flashingGreen: false }), 800);
-      } else {
-        // File doesn't exist, create it with initial mock data inside Aegis folder
-        const initialPayload = {
-          students: this.state.students,
-          screenings: this.state.screenings,
-          workEmail: this.state.workEmail,
-          emailAlertsEnabled: this.state.emailAlertsEnabled,
-          calendarSyncEnabled: this.state.calendarSyncEnabled,
-          teacherEmails: this.state.teacherEmails,
-          reportCardDates: this.state.reportCardDates,
-          deadlines: this.state.deadlines,
-          holidays: this.state.holidays
-        };
-        const newFileId = await driveService.createFile(this.state.accessToken, "all-data.json", initialPayload, folderId);
-        
-        // Also create segregated parent-portal.json inside Aegis folder
-        const parentPayload = driveService.segregateParentData(initialPayload);
-        const parentFileId = await driveService.createFile(this.state.accessToken, "parent-portal.json", parentPayload, folderId);
+    this.updateState({
+      students: students || this.state.students,
+      screenings: screenings || this.state.screenings,
+      syncStatus: "synced",
+      toastMessage: "Sync undone: Local records restored to pre-sync state.",
+      toastType: "info",
+      hasUndoBackup: false,
+      flashingGreen: true
+    });
 
-        this.updateState({
-          allDataFileId: newFileId,
-          parentPortalFileId: parentFileId,
-          aegisFolderId: folderId,
-          syncStatus: "synced",
-          flashingGreen: true
-        });
-
-        setTimeout(() => this.updateState({ flashingGreen: false }), 800);
-      }
-    } catch (err) {
-      console.error(err);
-      this.updateState({ syncStatus: "error", syncError: `Sync Failed: ${err.message}` });
-    }
+    setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+    this.triggerCloudSave();
   }
 
   // Debounced Auto-Save back to Google Drive
   triggerCloudSave() {
     // If not logged in, just keep saving locally
-    if (!this.isTokenValid() || !this.state.allDataFileId) {
+    if (!this.isTokenValid()) {
       return;
     }
 
@@ -1290,10 +1257,26 @@ export class StudentStore {
           holidays: this.state.holidays
         };
 
-        const folderId = this.state.aegisFolderId;
+        let folderId = this.state.aegisFolderId;
+        if (!folderId) {
+          folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
+          if (!folderId) folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
+          this.updateState({ aegisFolderId: folderId });
+        }
 
-        // 1. Update all-data.json (Confidential Data)
-        await driveService.updateFile(this.state.accessToken, this.state.allDataFileId, payload);
+        // 1. Update or create all-data.json (Confidential Data)
+        let allDataFid = this.state.allDataFileId;
+        if (!allDataFid) {
+          allDataFid = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+        }
+
+        if (allDataFid) {
+          await driveService.updateFile(this.state.accessToken, allDataFid, payload);
+          if (!this.state.allDataFileId) this.updateState({ allDataFileId: allDataFid });
+        } else {
+          allDataFid = await driveService.createFile(this.state.accessToken, "all-data.json", payload, folderId);
+          this.updateState({ allDataFileId: allDataFid });
+        }
         
         // 2. Build and update parent-portal.json (Segregated Data)
         let parentFid = this.state.parentPortalFileId;
@@ -1305,6 +1288,7 @@ export class StudentStore {
         
         if (parentFid) {
           await driveService.updateFile(this.state.accessToken, parentFid, parentPayload);
+          if (!this.state.parentPortalFileId) this.updateState({ parentPortalFileId: parentFid });
         } else {
           const newParentFid = await driveService.createFile(this.state.accessToken, "parent-portal.json", parentPayload, folderId);
           this.updateState({ parentPortalFileId: newParentFid });
