@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote, ArrowUpDown } from "lucide-react";
 import { guessTeacherEmail, store } from "../utils/studentStore";
 
 export default function Students({ 
@@ -244,11 +244,53 @@ export default function Students({
   const [expandedAccoms, setExpandedAccoms] = useState({});
   const [accomNoteInput, setAccomNoteInput] = useState({});
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.status === "Active" &&
-      student.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Sort and Filter state
+  const [sortBy, setSortBy] = useState("name"); // "name" | "grade" | "iepDueDate" | "classroomTeacher"
+  const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
+  const [filterGrade, setFilterGrade] = useState("all");
+  const [filterTeacher, setFilterTeacher] = useState("all");
+
+  const availableTeachers = Array.from(
+    new Set(
+      students
+        .filter((s) => s.status === "Active" && s.classroomTeacher)
+        .map((s) => s.classroomTeacher.trim())
+    )
+  ).sort();
+
+  const filteredStudents = students
+    .filter((student) => {
+      if (student.status !== "Active") return false;
+      if (searchTerm && !student.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+      if (filterGrade !== "all" && student.grade !== filterGrade) return false;
+      if (filterTeacher !== "all" && student.classroomTeacher !== filterTeacher) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === "grade") {
+        const gradeRank = { "6th": 6, "7th": 7, "8th": 8 };
+        const rankA = gradeRank[a.grade] || parseInt(a.grade) || 99;
+        const rankB = gradeRank[b.grade] || parseInt(b.grade) || 99;
+        comparison = rankA - rankB;
+        if (comparison === 0) comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === "iepDueDate") {
+        const dateA = a.iepDueDate || a.iepReviewDate || "9999-99-99";
+        const dateB = b.iepDueDate || b.iepReviewDate || "9999-99-99";
+        comparison = dateA.localeCompare(dateB);
+        if (comparison === 0) comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === "classroomTeacher") {
+        const teacherA = a.classroomTeacher || "ZZZ";
+        const teacherB = b.classroomTeacher || "ZZZ";
+        comparison = teacherA.localeCompare(teacherB);
+        if (comparison === 0) comparison = a.name.localeCompare(b.name);
+      } else {
+        // Default: name
+        comparison = a.name.localeCompare(b.name);
+      }
+
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
 
   const toggleAccom = (index) => {
     setExpandedAccoms(prev => ({ ...prev, [index]: !prev[index] }));
@@ -486,49 +528,132 @@ export default function Students({
         </div>
       )}
 
-      {/* Select All Tool Strip */}
-      {filteredStudents.length > 0 && (
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: "10px", 
-          marginBottom: "16px", 
-          padding: "8px 16px",
-          borderRadius: "8px", 
-          backgroundColor: "var(--bg-sidebar)",
-          border: "1px solid var(--border-color)",
-          width: "fit-content"
-        }}>
+      {/* Directory Controls: Select All & Sort/Filter Strip */}
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between",
+        alignItems: "center", 
+        flexWrap: "wrap",
+        gap: "12px", 
+        marginBottom: "16px", 
+        padding: "10px 16px",
+        borderRadius: "10px", 
+        backgroundColor: "var(--bg-sidebar)",
+        border: "1px solid var(--border-color)"
+      }}>
+        {/* Left Side: Select All Checkbox */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <input 
             type="checkbox" 
             id="selectAllCheckbox"
             checked={filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.includes(s.id))}
             onChange={(e) => {
               if (e.target.checked) {
-                // Select all filtered students
                 const allFilteredIds = filteredStudents.map(s => s.id);
                 setSelectedIds(prev => {
                   const combined = new Set([...prev, ...allFilteredIds]);
                   return Array.from(combined);
                 });
               } else {
-                // Unselect all filtered students
                 const filteredIdsSet = new Set(filteredStudents.map(s => s.id));
                 setSelectedIds(prev => prev.filter(id => !filteredIdsSet.has(id)));
               }
             }}
-            style={{ cursor: "pointer", width: "15px", height: "15px" }}
+            style={{ cursor: "pointer", width: "16px", height: "16px" }}
           />
           <label htmlFor="selectAllCheckbox" style={{ fontSize: "13px", fontWeight: "600", cursor: "pointer", userSelect: "none" }}>
-            Select All Filtered ({filteredStudents.length})
+            Select All ({filteredStudents.length})
           </label>
           {selectedIds.length > 0 && (
-            <span style={{ fontSize: "12px", color: "var(--text-muted)", borderLeft: "1px solid var(--border-color)", paddingLeft: "10px" }}>
-              {selectedIds.length} Total Selected
+            <span style={{ fontSize: "12px", color: "var(--accent-purple)", fontWeight: "700", borderLeft: "1px solid var(--border-color)", paddingLeft: "10px" }}>
+              {selectedIds.length} Selected
             </span>
           )}
         </div>
-      )}
+
+        {/* Right Side: Sort & Filter Controls next to selectAll */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* Sort By Dropdown */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+              <ArrowUpDown size={13} />
+              Sort:
+            </span>
+            <select
+              className="input-field"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{ padding: "4px 8px", fontSize: "12px", width: "auto", cursor: "pointer" }}
+            >
+              <option value="name">Name (A-Z)</option>
+              <option value="grade">Grade</option>
+              <option value="iepDueDate">IEP Due Date</option>
+              <option value="classroomTeacher">Teacher</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+              style={{ padding: "4px 8px", fontSize: "12px", cursor: "pointer" }}
+              title={sortOrder === "asc" ? "Ascending order (click for Descending)" : "Descending order (click for Ascending)"}
+            >
+              {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
+            </button>
+          </div>
+
+          {/* Grade Filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Grade:</span>
+            <select
+              className="input-field"
+              value={filterGrade}
+              onChange={(e) => setFilterGrade(e.target.value)}
+              style={{ padding: "4px 8px", fontSize: "12px", width: "auto", cursor: "pointer" }}
+            >
+              <option value="all">All Grades</option>
+              <option value="6th">6th Grade</option>
+              <option value="7th">7th Grade</option>
+              <option value="8th">8th Grade</option>
+            </select>
+          </div>
+
+          {/* Teacher Filter */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Teacher:</span>
+            <select
+              className="input-field"
+              value={filterTeacher}
+              onChange={(e) => setFilterTeacher(e.target.value)}
+              style={{ padding: "4px 8px", fontSize: "12px", width: "auto", maxWidth: "160px", cursor: "pointer" }}
+            >
+              <option value="all">All Teachers</option>
+              {availableTeachers.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reset Filters if active */}
+          {(filterGrade !== "all" || filterTeacher !== "all" || searchTerm !== "" || sortBy !== "name") && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setFilterGrade("all");
+                setFilterTeacher("all");
+                setSearchTerm("");
+                setSortBy("name");
+                setSortOrder("asc");
+              }}
+              style={{ padding: "4px 8px", fontSize: "11px", display: "flex", alignItems: "center", gap: "4px", color: "var(--accent-rose)" }}
+              title="Reset all filters and sorting"
+            >
+              <X size={12} />
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Main Students Grid */}
       <div className="students-grid">
