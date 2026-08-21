@@ -218,7 +218,9 @@ export const driveService = {
       return { students: [] };
     }
 
-    const filteredStudents = allData.students.map(student => {
+    const filteredStudents = allData.students
+      .filter(student => !student.deleted && student.status !== "Deleted")
+      .map(student => {
       // Extract ONLY safe public parameters
       return {
         id: student.id,

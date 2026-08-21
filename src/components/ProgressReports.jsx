@@ -305,6 +305,7 @@ export default function ProgressReports({ students, saveProgressReport }) {
                   }}>
                     {students
                       .filter(s => {
+                        if (s.deleted || s.status !== "Active") return false;
                         if (!searchQuery) return true;
                         return s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                                s.grade.toLowerCase().includes(searchQuery.toLowerCase());
@@ -332,6 +333,7 @@ export default function ProgressReports({ students, saveProgressReport }) {
                         </div>
                       ))}
                     {students.filter(s => {
+                      if (s.deleted || s.status !== "Active") return false;
                       if (!searchQuery) return true;
                       return s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                              s.grade.toLowerCase().includes(searchQuery.toLowerCase());

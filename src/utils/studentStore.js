@@ -200,6 +200,9 @@ export const guessTeacherEmail = (name) => {
  * Calculates Tennessee regulatory and facilitator buffers timelines
  */
 export const calculateTimelines = (student, isScreening = false) => {
+  if (!student || student.deleted || student.status === "Deleted" || (!isScreening && student.status !== "Active")) {
+    return [];
+  }
   const timelines = [];
   const deadlines = (store && store.state && store.state.deadlines) || DEFAULT_DEADLINES;
   
@@ -998,58 +1001,87 @@ export class StudentStore {
         if (!cloudItem) {
           // Local only -> preserve in merged dataset
           result.push(localItem);
-          stats.localAdded++;
+          if (!localItem.deleted && localItem.status !== "Deleted") {
+            stats.localAdded++;
+          }
         } else {
           const localTime = new Date(localItem.updatedAt || 0).getTime();
           const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
 
-          const normalizeEntity = (item) => {
-            if (!item) return item;
-            const copy = { ...item };
-            delete copy.updatedAt;
-            
-            // Standardize accommodations
-            if (Array.isArray(copy.accommodations)) {
-              copy.accommodations = copy.accommodations
-                .filter(a => !a.deleted)
-                .map(a => {
-                  if (typeof a === "string") return { label: a, notes: [] };
-                  return { label: a.label, notes: a.notes || [] };
-                });
+          const isLocalDeleted = !!localItem.deleted || localItem.status === "Deleted";
+          const isCloudDeleted = !!cloudItem.deleted || cloudItem.status === "Deleted";
+
+          if (isLocalDeleted || isCloudDeleted) {
+            // One or both sides are deleted
+            if (isLocalDeleted && !isCloudDeleted) {
+              if (localTime >= cloudTime) {
+                // Local deletion is newer than cloud -> Keep deleted tombstone
+                result.push(localItem);
+              } else {
+                // Cloud was modified after local deletion -> Resurrect cloud version
+                result.push(cloudItem);
+              }
+            } else if (!isLocalDeleted && isCloudDeleted) {
+              if (cloudTime > localTime) {
+                // Cloud deletion is newer than local edit -> Keep cloud deleted tombstone
+                result.push(cloudItem);
+              } else {
+                // Local was edited after cloud deletion -> Local wins
+                result.push(localItem);
+              }
+            } else {
+              // Both deleted
+              result.push(localTime >= cloudTime ? localItem : cloudItem);
             }
-
-            // Standardize review vs due date alias
-            if (copy.iepReviewDate !== undefined && copy.iepDueDate === undefined) {
-              copy.iepDueDate = copy.iepReviewDate;
-              delete copy.iepReviewDate;
-            }
-
-            // Clean undefined keys
-            Object.keys(copy).forEach(k => {
-              if (copy[k] === undefined) delete copy[k];
-            });
-
-            return copy;
-          };
-
-          const isContentIdentical = JSON.stringify(normalizeEntity(localItem)) === JSON.stringify(normalizeEntity(cloudItem));
-
-          if (isContentIdentical) {
-            // Identical content: keep the one with newer updatedAt (or local if cloud has epoch 0)
-            result.push(localTime >= cloudTime ? localItem : cloudItem);
-            stats.identical++;
           } else {
-            // Content differs between local and cloud -> conflict
-            conflicts.push({
-              id: localItem.id,
-              type: key,
-              name: localItem.name || cloudItem.name || localItem.id,
-              local: localItem,
-              cloud: cloudItem,
-              keep: localTime >= cloudTime ? "local" : "cloud"
-            });
-            stats.conflicted++;
-            result.push(localTime >= cloudTime ? localItem : cloudItem);
+            const normalizeEntity = (item) => {
+              if (!item) return item;
+              const copy = { ...item };
+              delete copy.updatedAt;
+              
+              // Standardize accommodations
+              if (Array.isArray(copy.accommodations)) {
+                copy.accommodations = copy.accommodations
+                  .filter(a => !a.deleted)
+                  .map(a => {
+                    if (typeof a === "string") return { label: a, notes: [] };
+                    return { label: a.label, notes: a.notes || [] };
+                  });
+              }
+
+              // Standardize review vs due date alias
+              if (copy.iepReviewDate !== undefined && copy.iepDueDate === undefined) {
+                copy.iepDueDate = copy.iepReviewDate;
+                delete copy.iepReviewDate;
+              }
+
+              // Clean undefined keys
+              Object.keys(copy).forEach(k => {
+                if (copy[k] === undefined) delete copy[k];
+              });
+
+              return copy;
+            };
+
+            const isContentIdentical = JSON.stringify(normalizeEntity(localItem)) === JSON.stringify(normalizeEntity(cloudItem));
+
+            if (isContentIdentical) {
+              // Identical content: keep the one with newer updatedAt (or local if cloud has epoch 0)
+              result.push(localTime >= cloudTime ? localItem : cloudItem);
+              stats.identical++;
+            } else {
+              // Content differs between local and cloud -> conflict
+              conflicts.push({
+                id: localItem.id,
+                type: key,
+                name: localItem.name || cloudItem.name || localItem.id,
+                local: localItem,
+                cloud: cloudItem,
+                keep: localTime >= cloudTime ? "local" : "cloud"
+              });
+              stats.conflicted++;
+              result.push(localTime >= cloudTime ? localItem : cloudItem);
+            }
           }
           cloudMap.delete(localItem.id);
         }
@@ -1058,7 +1090,9 @@ export class StudentStore {
       // Add cloud-only entities
       cloudMap.forEach(cloudItem => {
         result.push(cloudItem);
-        stats.cloudAdded++;
+        if (!cloudItem.deleted && cloudItem.status !== "Deleted") {
+          stats.cloudAdded++;
+        }
       });
 
       merged[key] = result;
@@ -1428,9 +1462,15 @@ export class StudentStore {
     this.triggerCloudSave();
   }
 
-  // Remove student from Active List
+  // Remove student from Active List (soft delete tombstone)
   removeStudent(studentId) {
-    const updated = this.state.students.filter(s => s.id !== studentId);
+    const now = new Date().toISOString();
+    const updated = this.state.students.map(s => {
+      if (s.id === studentId) {
+        return { ...s, deleted: true, deletedAt: now, updatedAt: now, status: "Inactive" };
+      }
+      return s;
+    });
     this.updateState({ students: updated });
     this.triggerCloudSave();
   }
@@ -1448,9 +1488,15 @@ export class StudentStore {
     this.triggerCloudSave();
   }
 
-  // Bulk remove students from active list
+  // Bulk remove students from active list (soft delete tombstone)
   bulkDeleteStudents(studentIds) {
-    const updated = this.state.students.filter(s => !studentIds.includes(s.id));
+    const now = new Date().toISOString();
+    const updated = this.state.students.map(s => {
+      if (studentIds.includes(s.id)) {
+        return { ...s, deleted: true, deletedAt: now, updatedAt: now, status: "Inactive" };
+      }
+      return s;
+    });
     this.updateState({ students: updated });
     this.triggerCloudSave();
   }
@@ -1539,9 +1585,15 @@ export class StudentStore {
     this.triggerCloudSave();
   }
 
-  // Remove screening entirely (archived)
+  // Remove screening entirely (archived tombstone)
   removeScreening(screeningId) {
-    const updated = this.state.screenings.filter(s => s.id !== screeningId);
+    const now = new Date().toISOString();
+    const updated = this.state.screenings.map(s => {
+      if (s.id === screeningId) {
+        return { ...s, deleted: true, deletedAt: now, updatedAt: now, status: "Archived" };
+      }
+      return s;
+    });
     this.updateState({ screenings: updated });
     this.triggerCloudSave();
   }
@@ -1551,8 +1603,14 @@ export class StudentStore {
     const screening = this.state.screenings.find(s => s.id === screeningId);
     if (!screening) return;
 
-    // 1. Remove from screening list
-    const updatedScreenings = this.state.screenings.filter(s => s.id !== screeningId);
+    const now = new Date().toISOString();
+    // 1. Remove from screening list (tombstone)
+    const updatedScreenings = this.state.screenings.map(s => {
+      if (s.id === screeningId) {
+        return { ...s, deleted: true, deletedAt: now, updatedAt: now, status: "Placed" };
+      }
+      return s;
+    });
 
     // 2. Add to active students list
     const newStudent = {

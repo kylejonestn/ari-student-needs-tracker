@@ -291,6 +291,72 @@ describe("Smart Cloud Sync - Undo & Preservation", () => {
   });
 });
 
+describe("Smart Cloud Sync - Deletions & Tombstones", () => {
+  it("should mark student as deleted with updatedAt timestamp when bulkDeleteStudents is called", () => {
+    const store = new StudentStore();
+    store.state.students = [
+      { id: "stu-1", name: "Student 1", grade: "6th", status: "Active" },
+      { id: "stu-2", name: "Student 2", grade: "7th", status: "Active" }
+    ];
+
+    store.bulkDeleteStudents(["stu-1"]);
+
+    const stu1 = store.state.students.find(s => s.id === "stu-1");
+    const stu2 = store.state.students.find(s => s.id === "stu-2");
+
+    assert.equal(stu1.deleted, true);
+    assert.equal(stu1.status, "Inactive");
+    assert.ok(stu1.updatedAt > "2026-01-01T00:00:00.000Z");
+    assert.equal(stu2.deleted, undefined);
+  });
+
+  it("should preserve local deletion during merge when cloud still has the legacy active record", () => {
+    const store = new StudentStore();
+    const localData = {
+      students: [
+        { id: "stu-1", name: "Deleted Student", deleted: true, status: "Inactive", updatedAt: "2026-08-21T12:00:00.000Z" },
+        { id: "stu-2", name: "Active Student", status: "Active", updatedAt: "2026-08-21T10:00:00.000Z" }
+      ],
+      screenings: []
+    };
+    const cloudData = {
+      students: [
+        { id: "stu-1", name: "Deleted Student", status: "Active", updatedAt: "2026-08-20T08:00:00.000Z" },
+        { id: "stu-2", name: "Active Student", status: "Active", updatedAt: "2026-08-20T08:00:00.000Z" }
+      ],
+      screenings: []
+    };
+
+    const { merged, conflicts, stats } = store.mergeWithCloud(localData, cloudData);
+
+    assert.equal(conflicts.length, 0, "No conflict should be raised for standard timestamp-driven deletion");
+    const mergedStu1 = merged.students.find(s => s.id === "stu-1");
+    assert.equal(mergedStu1.deleted, true, "Deleted student must remain deleted");
+    assert.equal(mergedStu1.status, "Inactive");
+  });
+
+  it("should adopt cloud deletion when cloud deletion timestamp is newer than local edit", () => {
+    const store = new StudentStore();
+    const localData = {
+      students: [
+        { id: "stu-1", name: "Student 1", status: "Active", updatedAt: "2026-08-20T08:00:00.000Z" }
+      ],
+      screenings: []
+    };
+    const cloudData = {
+      students: [
+        { id: "stu-1", name: "Student 1", deleted: true, status: "Inactive", updatedAt: "2026-08-21T14:00:00.000Z" }
+      ],
+      screenings: []
+    };
+
+    const { merged } = store.mergeWithCloud(localData, cloudData);
+    const mergedStu1 = merged.students.find(s => s.id === "stu-1");
+
+    assert.equal(mergedStu1.deleted, true, "Newer cloud deletion must win");
+  });
+});
+
 describe("SyncConflictModal - getDifferences helper", () => {
   it("should detect and describe differences between local and cloud student records", () => {
     const localStudent = {

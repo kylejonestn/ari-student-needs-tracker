@@ -250,7 +250,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
     return store.subscribe(checkGlobalSelection);
   }, []);
 
-  const activeStudents = students.filter(s => s.status === "Active");
+  const activeStudents = students.filter(s => !s.deleted && s.status === "Active");
 
   // Stages of the IEP timeline stepper
   const iepStages = [

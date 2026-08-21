@@ -135,12 +135,12 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   };
 
   // Aggregate stats
-  const activeCount = students.filter(s => s.status === "Active").length;
-  const screeningCount = screenings.filter(s => s.status !== "Pending Discontinuation" && s.status !== "Completed").length;
+  const activeCount = students.filter(s => !s.deleted && s.status === "Active").length;
+  const screeningCount = screenings.filter(s => !s.deleted && s.status !== "Pending Discontinuation" && s.status !== "Completed" && s.status !== "Placed" && s.status !== "Archived").length;
   
   // Consolidate all timelines
-  const activeTimelines = students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Active" })));
-  const screeningTimelines = screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Screening" })));
+  const activeTimelines = students.filter(s => !s.deleted && s.status === "Active").flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Active" })));
+  const screeningTimelines = screenings.filter(s => !s.deleted && s.status !== "Placed" && s.status !== "Archived").flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentId: s.id, studentName: s.name, category: "Screening" })));
   
   const rawTimelines = [...activeTimelines, ...screeningTimelines];
   
@@ -185,7 +185,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
   // Friday bulk signatures checklist students
   const fridaySignatureStudents = students.filter(
-    s => s.status === "Active" && s.iepFinalizedDate && !s.iepAtAGlanceSignaturesCompleted
+    s => !s.deleted && s.status === "Active" && s.iepFinalizedDate && !s.iepAtAGlanceSignaturesCompleted
   );
 
   const pushActivity = (msg) => {
@@ -412,7 +412,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           </div>
           
           <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            {students.filter(s => s.status === "Active" && !s.augustSetupComplete).map(student => (
+            {students.filter(s => !s.deleted && s.status === "Active" && !s.augustSetupComplete).map(student => (
               <div key={student.id} style={{ 
                 display: "flex", 
                 flexWrap: "wrap", 
@@ -466,7 +466,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                 </div>
               </div>
             ))}
-            {students.filter(s => s.status === "Active" && !s.augustSetupComplete).length === 0 && (
+            {students.filter(s => !s.deleted && s.status === "Active" && !s.augustSetupComplete).length === 0 && (
               <p style={{ color: "var(--text-muted)", fontSize: "12px", textAlign: "center", padding: "16px 0" }}>
                 ✔ All active students have completed their August caseload setup!
               </p>

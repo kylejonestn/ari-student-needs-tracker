@@ -253,14 +253,14 @@ export default function Students({
   const availableTeachers = Array.from(
     new Set(
       students
-        .filter((s) => s.status === "Active" && s.classroomTeacher)
+        .filter((s) => !s.deleted && s.status === "Active" && s.classroomTeacher)
         .map((s) => s.classroomTeacher.trim())
     )
   ).sort();
 
   const filteredStudents = students
     .filter((student) => {
-      if (student.status !== "Active") return false;
+      if (student.deleted || student.status !== "Active") return false;
       if (searchTerm && !student.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
       if (filterGrade !== "all" && student.grade !== filterGrade) return false;
       if (filterTeacher !== "all" && student.classroomTeacher !== filterTeacher) return false;

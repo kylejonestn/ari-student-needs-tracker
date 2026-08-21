@@ -69,7 +69,7 @@ export default function SelStudio({ students, updateStudent, addSelLog }) {
             value={selectedStudentId} 
             onChange={(e) => setSelectedStudentId(e.target.value)}
           >
-            {students.map(s => (
+            {students.filter(s => !s.deleted && s.status === "Active").map(s => (
               <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>
             ))}
           </select>

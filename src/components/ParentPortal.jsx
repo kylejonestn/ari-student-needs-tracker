@@ -104,7 +104,7 @@ Sent from Aegis Student Needs Tracker.`;
                 setSelectedStudentId(e.target.value);
               }}
             >
-              {students.map(s => (
+              {students.filter(s => !s.deleted && s.status === "Active").map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
