@@ -4,7 +4,7 @@
 
 import React, { useState } from "react";
 import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote, ArrowUpDown, Download } from "lucide-react";
-import { guessTeacherEmail, store } from "../utils/studentStore";
+import { guessTeacherEmail, store, normalizeToISODate } from "../utils/studentStore";
 
 export default function Students({ 
   students, 
@@ -188,16 +188,25 @@ export default function Students({
       const name = getVal("name");
       const grade = getVal("grade");
       const teacher = getVal("classroomTeacher");
-      const iepDate = getVal("iepDueDate");
-      const reevalDate = getVal("reevalDueDate");
+      const rawIepDate = getVal("iepDueDate");
+      const rawReevalDate = getVal("reevalDueDate");
       const accomsRaw = getVal("accommodations");
       const goalsRaw = getVal("goals");
 
-      // Validate date formats (simple YYYY-MM-DD check, empty or TBD is valid)
-      const isValidDate = (dStr) => {
-        if (!dStr || dStr.trim() === "" || dStr.trim() === "TBD") return true;
-        return /^\d{4}-\d{2}-\d{2}$/.test(dStr.trim());
+      // Normalize date formats (handles YYYY-MM-DD, DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, etc.)
+      const iepDate = normalizeToISODate(rawIepDate);
+      const reevalDate = normalizeToISODate(rawReevalDate);
+
+      // Validate date input: valid if empty/TBD/N/A or properly normalized
+      const isValidDateInput = (raw, normalized) => {
+        if (!raw || !raw.trim() || raw.trim().toUpperCase() === "TBD" || raw.trim().toUpperCase() === "N/A" || raw.trim() === "-") {
+          return true;
+        }
+        return !!normalized && /^\d{4}-\d{2}-\d{2}$/.test(normalized);
       };
+
+      const iepValid = isValidDateInput(rawIepDate, iepDate);
+      const reevalValid = isValidDateInput(rawReevalDate, reevalDate);
 
       // Accomms parser: split by comma, semicolon, or newlines
       const accommodations = accomsRaw
@@ -222,18 +231,22 @@ export default function Students({
         grade: grade || "",
         school: "Blackman Middle School",
         classroomTeacher: teacher || "",
+        rawIepDate,
+        rawReevalDate,
         iepDueDate: iepDate || "",
         reevalDueDate: reevalDate || "",
+        iepCorrected: rawIepDate && rawIepDate.trim() !== iepDate && iepDate !== "",
+        reevalCorrected: rawReevalDate && rawReevalDate.trim() !== reevalDate && reevalDate !== "",
         accommodations,
         progressReportGoals,
         goalsCount: progressReportGoals.length,
-        isValid: !!name && isValidDate(iepDate) && isValidDate(reevalDate),
+        isValid: !!name && iepValid && reevalValid,
         validationErrors: {
           name: !name,
           grade: false,
           classroomTeacher: false,
-          iepDueDate: !isValidDate(iepDate),
-          reevalDueDate: !isValidDate(reevalDate)
+          iepDueDate: !iepValid,
+          reevalDueDate: !reevalValid
         }
       };
     });
@@ -1735,7 +1748,7 @@ export default function Students({
                   </div>
 
                   <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", gap: "14px", flexWrap: "wrap" }}>
-                    <span>📅 Dates: <strong>YYYY-MM-DD</strong></span>
+                    <span>📅 Dates: Ingests <strong>YYYY-MM-DD</strong>, <strong>DD/MM/YYYY</strong>, <strong>DD/MM/YY</strong>, or <strong>MM/DD/YYYY</strong> (auto-converted to standard ISO)</span>
                     <span>📝 Multiple Accommodations & Goals: separated by semicolons (<strong>;</strong>)</span>
                   </div>
                 </div>
@@ -1805,7 +1818,7 @@ export default function Students({
                   {importPreviewData.some(s => !s.isValid) && (
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--accent-rose)", fontWeight: "600", padding: "6px 10px", borderRadius: "6px", backgroundColor: "var(--accent-rose-light)" }}>
                       <AlertCircle size={14} />
-                      Warning: Some rows contain invalid dates (must be YYYY-MM-DD) or missing data and will be skipped.
+                      Warning: Some rows contain invalid or unparseable dates and will be skipped.
                     </div>
                   )}
                 </div>
@@ -1845,10 +1858,20 @@ export default function Students({
                             {row.classroomTeacher || "(Not Set)"}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.iepDueDate ? "700" : "500", color: row.validationErrors.iepDueDate ? "var(--accent-rose)" : "inherit" }}>
-                            {row.iepDueDate || "(Not Set)"}
+                            {row.iepDueDate || (row.rawIepDate ? `Invalid: ${row.rawIepDate}` : "(Not Set)")}
+                            {row.iepCorrected && (
+                              <span style={{ fontSize: "10px", color: "var(--accent-emerald)", display: "block", fontWeight: "600" }}>
+                                ✔ Auto-corrected ({row.rawIepDate})
+                              </span>
+                            )}
                           </td>
                           <td style={{ padding: "10px", fontWeight: row.validationErrors.reevalDueDate ? "700" : "500", color: row.validationErrors.reevalDueDate ? "var(--accent-rose)" : "inherit" }}>
-                            {row.reevalDueDate || "(Not Set)"}
+                            {row.reevalDueDate || (row.rawReevalDate ? `Invalid: ${row.rawReevalDate}` : "(Not Set)")}
+                            {row.reevalCorrected && (
+                              <span style={{ fontSize: "10px", color: "var(--accent-emerald)", display: "block", fontWeight: "600" }}>
+                                ✔ Auto-corrected ({row.rawReevalDate})
+                              </span>
+                            )}
                           </td>
                           <td style={{ padding: "10px", color: "var(--text-muted)" }}>
                             {row.accommodations.join(", ") || "None"}

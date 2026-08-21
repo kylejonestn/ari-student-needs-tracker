@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StudentStore, getDifferences } from "./studentStore.js";
+import { StudentStore, getDifferences, normalizeToISODate } from "./studentStore.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -379,6 +379,36 @@ describe("SyncConflictModal - getDifferences helper", () => {
     assert.ok(diffKeys.includes("classroomTeacher"), "Should detect teacher diff");
     assert.ok(diffKeys.includes("iepDueDate"), "Should detect IEP due date diff");
     assert.ok(diffKeys.includes("notes"), "Should detect accommodation notes diff");
+  });
+});
+
+describe("Date Normalization - normalizeToISODate", () => {
+  it("should preserve standard ISO YYYY-MM-DD format", () => {
+    assert.equal(normalizeToISODate("2027-05-15"), "2027-05-15");
+    assert.equal(normalizeToISODate("2028-09-20"), "2028-09-20");
+  });
+
+  it("should normalize DD/MM/YYYY and DD-MM-YYYY formats", () => {
+    assert.equal(normalizeToISODate("15/05/2027"), "2027-05-15");
+    assert.equal(normalizeToISODate("20-09-2028"), "2028-09-20");
+  });
+
+  it("should normalize DD/MM/YY and DD-MM-YY 2-digit year formats", () => {
+    assert.equal(normalizeToISODate("15/05/27"), "2027-05-15");
+    assert.equal(normalizeToISODate("20/09/28"), "2028-09-20");
+    assert.equal(normalizeToISODate("04/06/27"), "2027-06-04");
+  });
+
+  it("should normalize MM/DD/YYYY and MM/DD/YY formats when day > 12", () => {
+    assert.equal(normalizeToISODate("05/15/2027"), "2027-05-15");
+    assert.equal(normalizeToISODate("05/15/27"), "2027-05-15");
+  });
+
+  it("should gracefully handle empty or TBD dates", () => {
+    assert.equal(normalizeToISODate(""), "");
+    assert.equal(normalizeToISODate("TBD"), "");
+    assert.equal(normalizeToISODate("N/A"), "");
+    assert.equal(normalizeToISODate(null), "");
   });
 });
 

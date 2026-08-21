@@ -2000,3 +2000,73 @@ export function getDifferences(local = {}, cloud = {}, type = "students") {
 
   return diffs;
 }
+
+/**
+ * Normalizes various date string formats (DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, MM/DD/YY, YYYY/MM/DD, etc.)
+ * into standardized ISO YYYY-MM-DD format.
+ */
+export function normalizeToISODate(rawDate) {
+  if (!rawDate) return "";
+  const str = rawDate.toString().trim();
+  if (!str || str.toUpperCase() === "TBD" || str.toUpperCase() === "N/A" || str === "-") {
+    return "";
+  }
+
+  // 1. Already ISO format: YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = str.match(/^(\d{4})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])$/);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // 2. Formats with slashes/dashes: DD/MM/YYYY, DD/MM/YY, MM/DD/YYYY, MM/DD/YY
+  const slashMatch = str.match(/^(\d{1,2})[-/. ](\d{1,2})[-/. ](\d{2,4})$/);
+  if (slashMatch) {
+    let p1 = parseInt(slashMatch[1], 10);
+    let p2 = parseInt(slashMatch[2], 10);
+    let y = parseInt(slashMatch[3], 10);
+
+    // Expand 2-digit year (e.g., 27 -> 2027, 98 -> 1998)
+    if (y < 100) {
+      y = y < 50 ? 2000 + y : 1900 + y;
+    }
+
+    let month, day;
+
+    if (p1 > 12 && p2 <= 12) {
+      // p1 is definitely Day (> 12) e.g., 25/05/2027 or 25/05/27
+      day = p1;
+      month = p2;
+    } else if (p2 > 12 && p1 <= 12) {
+      // p2 is definitely Day (> 12) e.g., 05/25/2027 or 05/25/27
+      month = p1;
+      day = p2;
+    } else if (p1 <= 12 && p2 <= 12) {
+      // Both <= 12 (e.g. 15/05 isn't here, but 04/06 is):
+      // Support DD/MM/YYYY and DD/MM/YY as requested
+      day = p1;
+      month = p2;
+    } else {
+      return "";
+    }
+
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+  }
+
+  // 3. Fallback: standard Date parsing (e.g., "May 15, 2027", "15 May 2027")
+  const parsedTimestamp = Date.parse(str);
+  if (!isNaN(parsedTimestamp)) {
+    const d = new Date(parsedTimestamp);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    if (year >= 1990 && year <= 2100) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  return "";
+}
+
