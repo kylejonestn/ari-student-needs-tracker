@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote, ArrowUpDown } from "lucide-react";
+import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote, ArrowUpDown, Download } from "lucide-react";
 import { guessTeacherEmail, store } from "../utils/studentStore";
 
 export default function Students({ 
@@ -46,9 +46,30 @@ export default function Students({
     classroomTeacher: "",
     iepDueDate: "",
     reevalDueDate: "",
-    accommodations: ""
+    accommodations: "",
+    goals: ""
   });
   const [importPreviewData, setImportPreviewData] = useState([]);
+
+  // Generate & trigger sample CSV template download
+  const downloadSampleCSV = () => {
+    const csvContent = [
+      "Name,Grade,Teacher,IEP Due Date,Re-eval Due Date,Accommodations,Goals",
+      '"Sarah Montgomery","7th","Mrs. Harrison","2027-05-15","2028-09-20","Curriculum compacting in Mathematics; Advanced inquiry project options; Tiered assignments in Science","Master algebra foundations with 90% accuracy; Complete independent research capstone project on renewable energy"',
+      '"Marcus Vance","8th","Mr. Thompson","2027-03-10","2028-11-14","Independent pacing; Depth and complexity questioning icons; Rubric choices for presentations","Demonstrate advanced literary analysis in comparative essays with 85% rubric mastery; Lead collaborative STEM challenge with peers"',
+      '"Elena Rostova","6th","Ms. Davis","2027-06-04","2029-02-18","Choice boards for thematic units; Compacting in Language Arts","Achieve 95% proficiency in critical reading and argumentative discourse"'
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "sample_caseload_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Client-side CSV Parser
   const parseCSV = (text) => {
@@ -115,7 +136,8 @@ export default function Students({
         classroomTeacher: "",
         iepDueDate: "",
         reevalDueDate: "",
-        accommodations: ""
+        accommodations: "",
+        goals: ""
       };
 
       const softMatches = {
@@ -124,7 +146,8 @@ export default function Students({
         classroomTeacher: ["teacher", "homeroom", "classroom teacher", "homeroom teacher", "core teacher", "subject teacher"],
         iepDueDate: ["iep", "iep date", "iep review", "annual iep", "review date"],
         reevalDueDate: ["reeval", "reeval date", "re-eval", "triennial", "re-evaluation"],
-        accommodations: ["accommodations", "supports", "services", "accoms"]
+        accommodations: ["accommodations", "supports", "services", "accoms"],
+        goals: ["goal", "goals", "iep goal", "iep goals", "progress goals", "objectives", "student goals"]
       };
 
       headers.forEach(h => {
@@ -168,6 +191,7 @@ export default function Students({
       const iepDate = getVal("iepDueDate");
       const reevalDate = getVal("reevalDueDate");
       const accomsRaw = getVal("accommodations");
+      const goalsRaw = getVal("goals");
 
       // Validate date formats (simple YYYY-MM-DD check, empty or TBD is valid)
       const isValidDate = (dStr) => {
@@ -180,6 +204,19 @@ export default function Students({
         ? accomsRaw.split(/[;,\n]+/).map(a => a.trim()).filter(Boolean)
         : [];
 
+      // Goals parser: split by semicolon, pipe, or newlines
+      const progressReportGoals = goalsRaw
+        ? goalsRaw
+            .split(/[;|\n]+/)
+            .map(g => g.trim())
+            .filter(Boolean)
+            .map((title, idx) => ({
+              id: `g-${idx + 1}`,
+              title,
+              category: "Academic Pacing"
+            }))
+        : [];
+
       return {
         name,
         grade: grade || "",
@@ -188,6 +225,8 @@ export default function Students({
         iepDueDate: iepDate || "",
         reevalDueDate: reevalDate || "",
         accommodations,
+        progressReportGoals,
+        goalsCount: progressReportGoals.length,
         isValid: !!name && isValidDate(iepDate) && isValidDate(reevalDate),
         validationErrors: {
           name: !name,
@@ -210,7 +249,7 @@ export default function Students({
       return;
     }
 
-    addStudents(validStudents.map(({ name, grade, school, classroomTeacher, iepDueDate, reevalDueDate, accommodations }) => ({
+    addStudents(validStudents.map(({ name, grade, school, classroomTeacher, iepDueDate, reevalDueDate, accommodations, progressReportGoals }) => ({
       name,
       grade,
       school,
@@ -218,6 +257,7 @@ export default function Students({
       iepDueDate,
       reevalDueDate,
       accommodations,
+      progressReportGoals: (progressReportGoals && progressReportGoals.length > 0) ? progressReportGoals : undefined,
       updatedAt: new Date().toISOString()
     })));
 
@@ -233,7 +273,8 @@ export default function Students({
       classroomTeacher: "",
       iepDueDate: "",
       reevalDueDate: "",
-      accommodations: ""
+      accommodations: "",
+      goals: ""
     });
     setImportPreviewData([]);
     setShowImportWizard(false);
@@ -1600,23 +1641,24 @@ export default function Students({
 
             {/* Step 1: File Upload */}
             {wizardStep === 1 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "20px", textAlign: "center", padding: "20px 0" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px", textAlign: "center", padding: "10px 0" }}>
                 <div style={{
                   border: "2px dashed var(--border-color)",
-                  borderRadius: "8px",
-                  padding: "40px 20px",
+                  borderRadius: "10px",
+                  padding: "32px 20px",
                   backgroundColor: "var(--bg-primary)",
                   cursor: "pointer",
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: "12px"
+                  gap: "10px",
+                  transition: "border-color 0.2s ease"
                 }}
                 onClick={() => document.getElementById("csv-file-input").click()}
                 >
-                  <Upload size={32} color="var(--text-muted)" />
-                  <span style={{ fontWeight: "700", fontSize: "14px", color: "var(--text-heading)" }}>Upload caseload spreadsheet</span>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Drag and drop your .csv file here, or click to browse</span>
+                  <Upload size={30} color="var(--accent-purple)" />
+                  <span style={{ fontWeight: "700", fontSize: "14px", color: "var(--text-heading)" }}>Upload Caseload Spreadsheet (.csv)</span>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Drag and drop your .csv file here, or click to browse files</span>
                   <input 
                     type="file" 
                     id="csv-file-input" 
@@ -1626,23 +1668,75 @@ export default function Students({
                   />
                 </div>
 
+                {/* Sample CSV Download and Template Guide */}
                 <div style={{
-                  padding: "12px",
-                  borderRadius: "8px",
-                  backgroundColor: "var(--bg-primary)",
+                  padding: "16px",
+                  borderRadius: "10px",
+                  backgroundColor: "var(--bg-sidebar)",
                   border: "1px solid var(--border-color)",
                   textAlign: "left",
-                  fontSize: "12px"
+                  fontSize: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px"
                 }}>
-                  <h4 style={{ fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px", color: "var(--text-heading)" }}>
-                    <Info size={14} color="var(--accent-purple)" />
-                    CSV File Template Guide
-                  </h4>
-                  <p style={{ color: "var(--text-muted)", marginBottom: "8px" }}>
-                    Ensure your spreadsheet contains column headers. Aegis will automatically attempt to match the columns, but you will be able to review and manually map them next.
-                  </p>
-                  <div style={{ fontFamily: "monospace", padding: "8px", backgroundColor: "var(--bg-primary)", borderRadius: "4px", border: "1px solid var(--border-color)", overflowX: "auto" }}>
-                    Name, Grade, Teacher, IEP Date, Re-eval Date, Accommodations
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                    <div>
+                      <h4 style={{ fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", gap: "6px", margin: 0, color: "var(--text-heading)" }}>
+                        <Info size={15} color="var(--accent-purple)" />
+                        Sample CSV Template & Guide
+                      </h4>
+                      <p style={{ color: "var(--text-muted)", margin: "3px 0 0", fontSize: "11.5px" }}>
+                        Need a template? Download our ready-to-use sample CSV formatted with sample students, accommodations, and IEP goals.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={downloadSampleCSV}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        backgroundColor: "rgba(168, 85, 247, 0.12)",
+                        borderColor: "var(--accent-purple)",
+                        color: "var(--accent-purple)",
+                        fontWeight: "700",
+                        padding: "7px 14px",
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        cursor: "pointer"
+                      }}
+                      title="Download sample_caseload_template.csv"
+                    >
+                      <Download size={14} />
+                      Download Sample CSV
+                    </button>
+                  </div>
+
+                  {/* Sample Structure Preview */}
+                  <div style={{
+                    backgroundColor: "var(--bg-primary)",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-color)",
+                    padding: "10px",
+                    fontFamily: "monospace",
+                    fontSize: "11px",
+                    overflowX: "auto",
+                    lineHeight: "1.6"
+                  }}>
+                    <div style={{ color: "var(--accent-purple)", fontWeight: "700", borderBottom: "1px solid var(--border-color)", paddingBottom: "4px", marginBottom: "4px" }}>
+                      Row 1 Headers: Name, Grade, Teacher, IEP Due Date, Re-eval Due Date, Accommodations, Goals
+                    </div>
+                    <div style={{ color: "var(--text-main)", whiteSpace: "pre" }}>
+                      Row 2 Example: "Sarah Montgomery", "7th", "Mrs. Harrison", "2027-05-15", "2028-09-20", "Curriculum compacting; Tiered assignments", "Master algebra with 90% accuracy; Research capstone"
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", gap: "14px", flexWrap: "wrap" }}>
+                    <span>📅 Dates: <strong>YYYY-MM-DD</strong></span>
+                    <span>📝 Multiple Accommodations & Goals: separated by semicolons (<strong>;</strong>)</span>
                   </div>
                 </div>
               </div>
@@ -1662,7 +1756,8 @@ export default function Students({
                     { key: "classroomTeacher", label: "Classroom Teacher", req: false },
                     { key: "iepDueDate", label: "IEP Due Date", req: false },
                     { key: "reevalDueDate", label: "Triennial Re-evaluation Date", req: false },
-                    { key: "accommodations", label: "Accommodations List", req: false }
+                    { key: "accommodations", label: "Accommodations List", req: false },
+                    { key: "goals", label: "IEP Goals List (Optional)", req: false }
                   ].map((field) => (
                     <div key={field.key} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "10px" }}>
                       <span style={{ fontSize: "13px", fontWeight: "600" }}>
@@ -1727,6 +1822,7 @@ export default function Students({
                         <th style={{ padding: "10px" }}>IEP Date</th>
                         <th style={{ padding: "10px" }}>Re-eval Date</th>
                         <th style={{ padding: "10px" }}>Accommodations</th>
+                        <th style={{ padding: "10px" }}>Goals</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1756,6 +1852,9 @@ export default function Students({
                           </td>
                           <td style={{ padding: "10px", color: "var(--text-muted)" }}>
                             {row.accommodations.join(", ") || "None"}
+                          </td>
+                          <td style={{ padding: "10px", color: row.goalsCount > 0 ? "var(--accent-purple)" : "var(--text-muted)", fontWeight: row.goalsCount > 0 ? "600" : "normal" }}>
+                            {row.goalsCount > 0 ? `${row.goalsCount} Goal(s)` : "None"}
                           </td>
                         </tr>
                       ))}
