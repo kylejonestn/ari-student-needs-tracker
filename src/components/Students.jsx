@@ -663,10 +663,27 @@ export default function Students({
             <div 
               key={student.id} 
               className="student-card"
-              onClick={() => setSelectedStudent(student)}
+              onClick={() => {
+                if (selectedIds.length > 0) {
+                  // In selection mode: clicking card toggles selection
+                  setSelectedIds(prev => 
+                    prev.includes(student.id)
+                      ? prev.filter(id => id !== student.id)
+                      : [...prev, student.id]
+                  );
+                } else {
+                  // Normal mode: open student profile
+                  setSelectedStudent(student);
+                }
+              }}
               style={{
                 cursor: "pointer",
-                ...(isSelected ? { borderColor: "var(--accent-purple)", boxShadow: "0 0 10px rgba(168, 85, 247, 0.25)" } : {})
+                transition: "all 0.15s ease",
+                ...(isSelected ? { 
+                  borderColor: "var(--accent-purple)", 
+                  boxShadow: "0 0 12px rgba(168, 85, 247, 0.3)",
+                  backgroundColor: "rgba(168, 85, 247, 0.05)"
+                } : {})
               }}
             >
               <div className="student-card-header">
@@ -682,7 +699,7 @@ export default function Students({
                       }
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    style={{ cursor: "pointer", width: "15px", height: "15px" }}
+                    style={{ cursor: "pointer", width: "16px", height: "16px" }}
                   />
                   <div className="student-initials" style={isSelected ? { backgroundColor: "var(--accent-purple)", color: "#fff" } : {}}>
                     {student.name.split(" ").map((n) => n[0]).join("")}
@@ -716,11 +733,53 @@ export default function Students({
 
               <button
                 className="btn btn-secondary"
-                style={{ width: "100%", padding: "6px", fontSize: "12px", marginTop: "8px" }}
-                onClick={() => setSelectedStudent(student)}
+                style={{ 
+                  width: "100%", 
+                  padding: "6px", 
+                  fontSize: "12px", 
+                  marginTop: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  ...(selectedIds.length > 0 ? {
+                    borderColor: isSelected ? "var(--accent-purple)" : "var(--border-color)",
+                    backgroundColor: isSelected ? "rgba(168, 85, 247, 0.15)" : "transparent",
+                    color: isSelected ? "var(--accent-purple)" : "var(--text-main)",
+                    fontWeight: isSelected ? "700" : "500"
+                  } : {})
+                }}
+                onClick={(e) => {
+                  if (selectedIds.length > 0) {
+                    e.stopPropagation();
+                    setSelectedIds(prev => 
+                      prev.includes(student.id)
+                        ? prev.filter(id => id !== student.id)
+                        : [...prev, student.id]
+                    );
+                  } else {
+                    setSelectedStudent(student);
+                  }
+                }}
               >
-                <BookOpen size={14} />
-                Open Accommodations & Profile
+                {selectedIds.length > 0 ? (
+                  isSelected ? (
+                    <>
+                      <Check size={14} color="var(--accent-purple)" />
+                      Selected ({selectedIds.indexOf(student.id) + 1} of {selectedIds.length})
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={14} />
+                      Click to Select
+                    </>
+                  )
+                ) : (
+                  <>
+                    <BookOpen size={14} />
+                    Open Accommodations & Profile
+                  </>
+                )}
               </button>
             </div>
           );
