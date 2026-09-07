@@ -1430,7 +1430,7 @@ export class StudentStore {
   }
 
   // Smart cloud sync method that merges instead of overwriting
-  async syncToCloud() {
+  async syncToCloud(isSilent = false) {
     if (!this.isTokenValid()) {
       this.connectGoogleDrive();
       return;
@@ -1449,13 +1449,26 @@ export class StudentStore {
       let fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
       if (!fileId) {
         // No cloud file exists yet -> save current state as cloud master
-        this.triggerCloudSave();
+        const payload = {
+          students: this.state.students,
+          screenings: this.state.screenings,
+          workEmail: this.state.workEmail,
+          emailAlertsEnabled: this.state.emailAlertsEnabled,
+          calendarSyncEnabled: this.state.calendarSyncEnabled,
+          teacherEmails: this.state.teacherEmails,
+          reportCardDates: this.state.reportCardDates,
+          deadlines: this.state.deadlines,
+          holidays: this.state.holidays
+        };
+        await this.saveToCloudDirect(payload);
         this.updateState({
           syncStatus: "synced",
           lastSyncedAt: new Date().toISOString(),
           flashingGreen: true,
-          toastMessage: "Google Drive connected: Caseload uploaded.",
-          toastType: "sync",
+          ...(isSilent ? {} : {
+            toastMessage: "Google Drive connected: Caseload uploaded.",
+            toastType: "sync"
+          }),
           hasUndoBackup: false
         });
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
@@ -1498,6 +1511,21 @@ export class StudentStore {
         }).catch(() => {});
       }
 
+      const nowIso = new Date().toISOString();
+
+      // Directly write the merged result back to Google Drive
+      await this.saveToCloudDirect({
+        students: merged.students || this.state.students,
+        screenings: merged.screenings || this.state.screenings,
+        workEmail: merged.workEmail || this.state.workEmail,
+        emailAlertsEnabled: merged.emailAlertsEnabled !== undefined ? merged.emailAlertsEnabled : this.state.emailAlertsEnabled,
+        calendarSyncEnabled: merged.calendarSyncEnabled !== undefined ? merged.calendarSyncEnabled : this.state.calendarSyncEnabled,
+        teacherEmails: merged.teacherEmails || this.state.teacherEmails,
+        reportCardDates: merged.reportCardDates || this.state.reportCardDates,
+        deadlines: merged.deadlines || this.state.deadlines,
+        holidays: merged.holidays || this.state.holidays
+      });
+
       // No conflicts -> apply merged data and immediately update cloud
       this.updateState({
         allDataFileId: fileId,
@@ -1512,18 +1540,19 @@ export class StudentStore {
         deadlines: merged.deadlines || this.state.deadlines,
         holidays: merged.holidays || this.state.holidays,
         syncStatus: "synced",
-        lastSyncedAt: new Date().toISOString(),
+        lastSyncedAt: nowIso,
         conflicts: [],
         mergedData: null,
         flashingGreen: true,
-        toastMessage: syncMessage,
-        toastType: "sync",
+        ...(isSilent ? {} : {
+          toastMessage: syncMessage,
+          toastType: "sync"
+        }),
         hasUndoBackup: stats.localAdded > 0 || stats.cloudAdded > 0 || stats.conflicted > 0
       });
 
       setTimeout(() => this.updateState({ flashingGreen: false }), 800);
 
-      this.triggerCloudSave();
       return { merged, conflicts: [], stats };
     } catch (err) {
       console.error(err);
@@ -1561,7 +1590,7 @@ export class StudentStore {
     this.triggerCloudSave();
   }
 
-  // Debounced Auto-Save back to Google Drive
+  // Debounced Auto-Save & Sync back to Google Drive (2-way merge)
   triggerCloudSave() {
     // If not logged in, just keep saving locally
     if (!this.isTokenValid()) {
@@ -1574,65 +1603,9 @@ export class StudentStore {
 
     this.debounceTimer = setTimeout(async () => {
       try {
-        const payload = {
-          students: this.state.students,
-          screenings: this.state.screenings,
-          workEmail: this.state.workEmail,
-          emailAlertsEnabled: this.state.emailAlertsEnabled,
-          calendarSyncEnabled: this.state.calendarSyncEnabled,
-          teacherEmails: this.state.teacherEmails,
-          reportCardDates: this.state.reportCardDates,
-          deadlines: this.state.deadlines,
-          holidays: this.state.holidays
-        };
-
-        let folderId = this.state.aegisFolderId;
-        if (!folderId) {
-          folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
-          if (!folderId) folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
-          this.updateState({ aegisFolderId: folderId });
-        }
-
-        // 1. Update or create all-data.json (Confidential Data)
-        let allDataFid = this.state.allDataFileId;
-        if (!allDataFid) {
-          allDataFid = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
-        }
-
-        if (allDataFid) {
-          await driveService.updateFile(this.state.accessToken, allDataFid, payload);
-          if (!this.state.allDataFileId) this.updateState({ allDataFileId: allDataFid });
-        } else {
-          allDataFid = await driveService.createFile(this.state.accessToken, "all-data.json", payload, folderId);
-          this.updateState({ allDataFileId: allDataFid });
-        }
-        
-        // 2. Build and update parent-portal.json (Segregated Data)
-        let parentFid = this.state.parentPortalFileId;
-        if (!parentFid) {
-          parentFid = await driveService.findFile(this.state.accessToken, "parent-portal.json", folderId);
-        }
-        
-        const parentPayload = driveService.segregateParentData(payload);
-        
-        if (parentFid) {
-          await driveService.updateFile(this.state.accessToken, parentFid, parentPayload);
-          if (!this.state.parentPortalFileId) this.updateState({ parentPortalFileId: parentFid });
-        } else {
-          const newParentFid = await driveService.createFile(this.state.accessToken, "parent-portal.json", parentPayload, folderId);
-          this.updateState({ parentPortalFileId: newParentFid });
-        }
-
-        this.updateState({
-          syncStatus: "synced",
-          lastSyncedAt: new Date().toISOString(),
-          flashingGreen: true
-        });
-        
-        setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+        await this.syncToCloud(true);
       } catch (err) {
-        console.error(err);
-        this.updateState({ syncStatus: "error", syncError: `Auto-Save Failed: ${err.message}` });
+        console.error("Auto-sync save failed", err);
       }
     }, 1200); // 1.2 second debounce
   }

@@ -531,5 +531,42 @@ describe("Google Drive Multi-Workstation Sync Enhancements", () => {
     assert.equal(state.accessToken, null, "accessToken should be null");
     assert.equal(state.syncStatus, "disconnected", "syncStatus should be disconnected");
   });
+
+  it("should preserve and merge new students added on two different devices concurrently", () => {
+    const store = new StudentStore();
+    const baselineSync = "2026-09-07T14:00:00.000Z";
+
+    // Initial state before additions
+    const initialStudent = { id: "stu-existing", name: "Existing Student", grade: "6th", updatedAt: baselineSync };
+
+    // Device A adds Student A
+    const deviceAStudent = { id: "stu-device-a", name: "Student From Device A", grade: "7th", updatedAt: "2026-09-07T14:05:00.000Z" };
+    // Device B adds Student B
+    const deviceBStudent = { id: "stu-device-b", name: "Student From Device B", grade: "8th", updatedAt: "2026-09-07T14:06:00.000Z" };
+
+    // Device A synced first: Cloud has initial + Student A
+    const cloudAfterDeviceA = {
+      students: [initialStudent, deviceAStudent],
+      screenings: []
+    };
+
+    // Device B has initial + Student B locally, with lastSyncedAt at baseline
+    const deviceBLocalState = {
+      lastSyncedAt: baselineSync,
+      students: [initialStudent, deviceBStudent],
+      screenings: []
+    };
+
+    // Device B syncs
+    const { merged, conflicts, stats } = store.mergeWithCloud(deviceBLocalState, cloudAfterDeviceA);
+
+    assert.equal(conflicts.length, 0, "No conflicts expected for distinct student additions");
+    assert.equal(merged.students.length, 3, "All 3 students should be in merged dataset");
+    assert.ok(merged.students.some(s => s.id === "stu-existing"), "Existing student preserved");
+    assert.ok(merged.students.some(s => s.id === "stu-device-a"), "Device A student preserved");
+    assert.ok(merged.students.some(s => s.id === "stu-device-b"), "Device B student preserved");
+    assert.equal(stats.cloudAdded, 1, "Should count 1 cloud addition (Device A)");
+    assert.equal(stats.localAdded, 1, "Should count 1 local addition (Device B)");
+  });
 });
 
