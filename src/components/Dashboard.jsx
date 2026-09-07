@@ -31,8 +31,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   ]);
 
   const [showAugustSetup, setShowAugustSetup] = useState(false);
-  const [screeningsExpanded, setScreeningsExpanded] = useState(false);
-  const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "warning", "overdue"
+  const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "thisWeek", "overdue"
 
   const handleTimelineClick = (t) => {
     if (t.category === "Screening") {
@@ -297,74 +296,20 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
         <div 
           className="glass-panel stat-card"
-          onClick={() => setScreeningsExpanded(!screeningsExpanded)}
+          onClick={() => store.updateState({ activeTab: "screening" })}
           style={{ 
-            cursor: "pointer", 
-            flexDirection: "column", 
-            alignItems: "stretch", 
-            gap: "12px",
-            transition: "all var(--transition-normal)",
-            height: "fit-content"
+            cursor: "pointer",
+            transition: "all var(--transition-normal)"
           }}
+          title="Open Screening Center"
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <div className="stat-icon emerald">
-              <CheckSquare size={24} />
-            </div>
-            <div className="stat-details">
-              <span className="stat-value">{screeningCount}</span>
-              <span className="stat-label">Pending Screenings</span>
-            </div>
+          <div className="stat-icon emerald">
+            <CheckSquare size={24} />
           </div>
-
-          {screeningsExpanded && (
-            <div 
-              style={{ 
-                borderTop: "1px solid var(--border-color)", 
-                paddingTop: "8px", 
-                marginTop: "4px",
-                fontSize: "12.5px", 
-                color: "var(--text-main)" 
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <strong style={{ color: "var(--accent-emerald)", display: "block", marginBottom: "4px" }}>
-                Active Evaluations:
-              </strong>
-              {screenings.filter(s => s.status !== "Pending Discontinuation" && s.status !== "Completed").length === 0 ? (
-                <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>No pending screenings.</span>
-              ) : (
-                <p style={{ margin: 0, lineHeight: "1.6" }}>
-                  {screenings
-                    .filter(s => s.status !== "Pending Discontinuation" && s.status !== "Completed")
-                    .map((s, idx, arr) => (
-                      <React.Fragment key={s.id}>
-                        <a 
-                          href="#" 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            store.updateState({ 
-                              activeTab: "screening",
-                              selectedScreeningId: s.id
-                            });
-                          }}
-                          style={{ 
-                            color: "var(--accent-purple)", 
-                            fontWeight: "600", 
-                            textDecoration: "underline",
-                            cursor: "pointer"
-                          }}
-                        >
-                          {s.name}
-                        </a>
-                        {idx < arr.length - 1 ? ", " : ""}
-                      </React.Fragment>
-                    ))
-                  }
-                </p>
-              )}
-            </div>
-          )}
+          <div className="stat-details">
+            <span className="stat-value">{screeningCount}</span>
+            <span className="stat-label">Pending Screenings</span>
+          </div>
         </div>
 
         <div 
