@@ -253,7 +253,7 @@ export const calculateTimelines = (student, isScreening = false) => {
         desc: "Complete all cognitive, performance, and creative testing under TN regulatory calendar.",
         dueDate: target60Day,
         daysRemaining: daysLeft60,
-        status: daysLeft60 <= 0 ? "overdue" : daysLeft60 <= 15 ? "warning" : "on-track",
+        status: daysLeft60 <= 0 ? "overdue" : daysLeft60 <= 7 ? "warning" : "on-track",
         mandatory: true
       });
 
@@ -343,7 +343,7 @@ export const calculateTimelines = (student, isScreening = false) => {
         desc: "School Psychologist's 60-day calendar to administer IQ test and compile psychological results.",
         dueDate: psych60Day,
         daysRemaining: daysLeftPsych,
-        status: daysLeftPsych <= 0 ? "overdue" : daysLeftPsych <= 10 ? "warning" : "on-track",
+        status: daysLeftPsych <= 0 ? "overdue" : daysLeftPsych <= 7 ? "warning" : "on-track",
         mandatory: true
       });
 
@@ -444,7 +444,7 @@ export const calculateTimelines = (student, isScreening = false) => {
         desc: "Mandatory annual update of IEP goals, accommodations, and special education services.",
         dueDate: student.iepDueDate,
         daysRemaining: daysLeft,
-        status: daysLeft <= 0 ? "overdue" : daysLeft <= 30 ? "warning" : "on-track",
+        status: daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track",
         mandatory: true
       });
 
@@ -606,7 +606,7 @@ export const calculateTimelines = (student, isScreening = false) => {
         desc: "Mandatory three-year eligibility assessment review.",
         dueDate: student.reevalDueDate,
         daysRemaining: daysLeft,
-        status: daysLeft <= 0 ? "overdue" : daysLeft <= 90 ? "warning" : "on-track",
+        status: daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track",
         mandatory: true
       });
 

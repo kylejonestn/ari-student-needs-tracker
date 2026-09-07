@@ -12,6 +12,7 @@ import {
 import { 
   Users, 
   CheckSquare, 
+  SquareCheckBig,
   AlertTriangle, 
   Bell, 
   Send,
@@ -144,44 +145,52 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   
   const rawTimelines = [...activeTimelines, ...screeningTimelines];
   
-  // Count caseload-wide alert levels
-  const overdueCount = rawTimelines.filter(t => t.status === "overdue").length;
-  const warningCount = rawTimelines.filter(t => t.status === "warning").length;
+  // Current calendar / school week range (Monday through Sunday)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday...
+  
+  // Start of week (Monday 00:00:00)
+  const startOfWeek = new Date(today);
+  const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+  startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
+  
+  // End of week (Sunday 23:59:59)
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
 
-  // Filter for: Overdue OR Due within the current calendar week (Monday to Sunday)
-  const thisWeekTimelines = rawTimelines.filter(t => {
-    // 1. Show overdue items instantly
-    if (t.daysRemaining !== null && t.daysRemaining < 0) return true;
+  // Items due within the current school week (excluding overdue items)
+  const dueThisWeekItems = rawTimelines.filter(t => {
+    if (t.daysRemaining !== null && t.daysRemaining < 0) return false;
     
-    // 2. Check if due date falls in the current calendar week (Monday through Sunday)
-    if (!t.dueDate) return false;
+    if (t.dueDate) {
+      const dueDateObj = new Date(t.dueDate + "T12:00:00");
+      return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
+    }
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday...
-    
-    // Start of week (Monday)
-    const startOfWeek = new Date(today);
-    const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-    startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
-    
-    // End of week (Sunday night)
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(endOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-    
-    const dueDateObj = new Date(t.dueDate);
-    dueDateObj.setHours(0, 0, 0, 0);
-    
-    return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
+    // Active non-dated tasks requiring completion this week (e.g. Friday signatures)
+    if (t.type === "IEP Friday Signatures" || t.type === "Pending Discontinuation") {
+      return true;
+    }
+    return false;
   });
 
+  const dueThisWeekCount = dueThisWeekItems.length;
+
+  // Overdue items
+  const overdueItems = rawTimelines.filter(t => t.daysRemaining !== null && t.daysRemaining < 0);
+  const overdueCount = overdueItems.length;
+
+  // Combined default view (all overdue items + all items due this week)
+  const defaultWeeklyTimelines = [...overdueItems, ...dueThisWeekItems];
+
   const displayedTimelines = (
-    timelineFilter === "warning"
-      ? rawTimelines.filter(t => t.status === "warning")
+    timelineFilter === "thisWeek"
+      ? dueThisWeekItems
       : timelineFilter === "overdue"
-      ? rawTimelines.filter(t => t.status === "overdue")
-      : thisWeekTimelines
+      ? overdueItems
+      : defaultWeeklyTimelines
   ).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
 
   // Friday bulk signatures checklist students
@@ -360,20 +369,20 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
         <div 
           className="glass-panel stat-card"
-          onClick={() => setTimelineFilter(prev => prev === "warning" ? "all" : "warning")}
+          onClick={() => setTimelineFilter(prev => prev === "thisWeek" ? "all" : "thisWeek")}
           style={{ 
             cursor: "pointer",
             transition: "all var(--transition-normal)",
-            border: timelineFilter === "warning" ? "2px solid var(--accent-amber)" : "2px solid transparent",
-            boxShadow: timelineFilter === "warning" ? "0 0 12px rgba(245, 158, 11, 0.4)" : "none"
+            border: timelineFilter === "thisWeek" ? "2px solid var(--accent-amber)" : "2px solid transparent",
+            boxShadow: timelineFilter === "thisWeek" ? "0 0 12px rgba(245, 158, 11, 0.4)" : "none"
           }}
         >
           <div className="stat-icon amber">
-            <AlertTriangle size={24} />
+            <SquareCheckBig size={24} />
           </div>
           <div className="stat-details">
-            <span className="stat-value">{warningCount}</span>
-            <span className="stat-label">Action Warning Timelines</span>
+            <span className="stat-value">{dueThisWeekCount}</span>
+            <span className="stat-label">Due this week</span>
           </div>
         </div>
 
@@ -483,15 +492,15 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           <div className="timeline-header">
             <div>
               <h2>
-                {timelineFilter === "warning"
-                  ? `Action Warning Timelines (${displayedTimelines.length})`
+                {timelineFilter === "thisWeek"
+                  ? `Due This Week (${displayedTimelines.length})`
                   : timelineFilter === "overdue"
                   ? `Overdue Timelines (${displayedTimelines.length})`
                   : "Weekly Timeline & Due Summaries"}
               </h2>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-                {timelineFilter === "warning"
-                  ? "Showing all active warning deadlines across caseload and screening evaluations"
+                {timelineFilter === "thisWeek"
+                  ? "Showing all action items due in the current school week"
                   : timelineFilter === "overdue"
                   ? "Showing all overdue deadlines requiring immediate attention"
                   : "Tennessee Special Education mandate countdowns (Current Week & Overdue)"}
@@ -503,7 +512,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                 style={{ padding: "4px 8px", fontSize: "11px", height: "fit-content", alignSelf: "flex-start" }}
                 onClick={() => setTimelineFilter("all")}
               >
-                Clear Filter (Show This Week)
+                Clear Filter (Show All Weekly)
               </button>
             ) : (
               <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>RCS Schedule</span>
