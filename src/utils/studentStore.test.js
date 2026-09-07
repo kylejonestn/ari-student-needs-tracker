@@ -51,15 +51,16 @@ describe("Smart Cloud Sync - mergeWithCloud", () => {
     assert.equal(merged.students[0].name, "Alice Montgomery");
   });
 
-  it("should detect a conflict when local and cloud have differing content for the same student", () => {
+  it("should detect a conflict when both local and cloud have concurrent edits after last sync", () => {
     const localData = {
+      lastSyncedAt: "2026-08-20T10:00:00.000Z",
       students: [
         {
           id: "stu-1",
           name: "Alice Montgomery",
           grade: "6th",
           classroomTeacher: "Mrs. Harrison",
-          updatedAt: "2026-08-20T12:00:00.000Z" // Newer local
+          updatedAt: "2026-08-20T12:00:00.000Z" // Edited locally after last sync
         }
       ],
       screenings: []
@@ -70,9 +71,9 @@ describe("Smart Cloud Sync - mergeWithCloud", () => {
         {
           id: "stu-1",
           name: "Alice Montgomery",
-          grade: "7th", // Changed in cloud
+          grade: "7th", // Changed in cloud after last sync
           classroomTeacher: "Mr. Thompson",
-          updatedAt: "2026-08-20T11:00:00.000Z" // Older cloud
+          updatedAt: "2026-08-20T11:00:00.000Z"
         }
       ],
       screenings: []
@@ -87,8 +88,44 @@ describe("Smart Cloud Sync - mergeWithCloud", () => {
     assert.equal(conflicts[0].cloud.grade, "7th");
   });
 
-  it("should detect conflicts in screening profiles as well", () => {
+  it("should automatically adopt cloud update when local record was untouched (e.g. secondary device or iPhone)", () => {
     const localData = {
+      lastSyncedAt: "2026-08-20T10:00:00.000Z",
+      students: [
+        {
+          id: "stu-1",
+          name: "Alice Montgomery",
+          grade: "6th",
+          classroomTeacher: "Mrs. Harrison",
+          updatedAt: "2026-08-20T09:00:00.000Z" // Untouched since before last sync
+        }
+      ],
+      screenings: []
+    };
+
+    const cloudData = {
+      students: [
+        {
+          id: "stu-1",
+          name: "Alice Montgomery",
+          grade: "7th", // Edited on primary laptop
+          classroomTeacher: "Mrs. Harrison",
+          updatedAt: "2026-08-20T11:00:00.000Z"
+        }
+      ],
+      screenings: []
+    };
+
+    const { merged, conflicts, stats } = store.mergeWithCloud(localData, cloudData);
+
+    assert.equal(conflicts.length, 0, "Should have 0 conflicts and adopt cloud update automatically");
+    assert.equal(merged.students[0].grade, "7th", "Should adopt 7th grade from cloud");
+    assert.equal(stats.cloudAdded, 1);
+  });
+
+  it("should detect conflicts in screening profiles during concurrent edits", () => {
+    const localData = {
+      lastSyncedAt: "2026-08-20T10:00:00.000Z",
       students: [],
       screenings: [
         {

@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from "react";
 import { store, DEFAULT_REPORT_CARD_DATES, DEFAULT_CLIENT_ID, DEFAULT_DEADLINES, DEFAULT_HOLIDAYS } from "../utils/studentStore";
-import { Cloud, CloudOff, Info, Key, HelpCircle, Check, RefreshCw, Mail, Calendar, Clock, X, Trash2, Plus, Upload } from "lucide-react";
+import { Cloud, CloudOff, Info, Key, HelpCircle, Check, RefreshCw, Mail, Calendar, Clock, X, Trash2, Plus, Upload, Download, RotateCcw } from "lucide-react";
 
 // PDF.js dynamic loader helper
 const loadPdfJs = () => {
@@ -542,6 +542,38 @@ export default function SettingsPanel({
                   </button>
                 )}
               </div>
+
+              {accessToken && (
+                <div style={{ marginTop: "4px", paddingTop: "12px", borderTop: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--text-heading)" }}>
+                    Multi-Workstation & iPhone Controls:
+                  </span>
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => store.forceDownloadFromCloud()}
+                      style={{ fontSize: "11.5px", padding: "6px 12px", flexGrow: "1" }}
+                      title="Download and replace local storage with Google Drive master copy"
+                      disabled={syncStatus === "connecting" || syncStatus === "saving"}
+                    >
+                      <Download size={14} />
+                      Download Cloud Master
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => store.resetLocalDatabase()}
+                      style={{ fontSize: "11.5px", padding: "6px 12px", color: "var(--accent-amber)", borderColor: "rgba(245, 158, 11, 0.4)", flexGrow: "1" }}
+                      title="Clear local browser database and re-download fresh master from Google Drive"
+                      disabled={syncStatus === "connecting" || syncStatus === "saving"}
+                    >
+                      <RotateCcw size={14} />
+                      Reset Cache & Re-sync
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

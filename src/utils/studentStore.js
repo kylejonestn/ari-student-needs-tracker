@@ -867,12 +867,25 @@ export class StudentStore {
     // Auto-sync when window gains focus or tab becomes visible (cross-workstation sync)
     if (typeof window !== "undefined") {
       let lastFocusSync = 0;
-      const handleWindowFocus = () => {
+      let isFocusSyncing = false;
+      const handleWindowFocus = async () => {
         const now = Date.now();
-        // Throttle to at most once every 30 seconds
-        if (now - lastFocusSync > 30000 && this.isTokenValid()) {
+        // Throttle to at most once every 15 seconds, and avoid overlapping syncs or interrupting conflict review / saving
+        if (
+          now - lastFocusSync > 15000 &&
+          this.isTokenValid() &&
+          !isFocusSyncing &&
+          this.state.syncStatus !== "saving" &&
+          this.state.syncStatus !== "conflict" &&
+          this.state.syncStatus !== "connecting"
+        ) {
           lastFocusSync = now;
-          this.syncToCloud();
+          isFocusSyncing = true;
+          try {
+            await this.syncToCloud();
+          } finally {
+            isFocusSyncing = false;
+          }
         }
       };
       window.addEventListener("focus", handleWindowFocus);
@@ -1043,6 +1056,7 @@ export class StudentStore {
     const merged = {};
     const conflicts = [];
     const stats = { localAdded: 0, cloudAdded: 0, identical: 0, conflicted: 0 };
+    const lastSyncTime = localData.lastSyncedAt ? new Date(localData.lastSyncedAt).getTime() : 0;
 
     // Helper to merge entity collections (students, screenings)
     const mergeEntities = (key) => {
@@ -1133,17 +1147,31 @@ export class StudentStore {
               result.push(localTime >= cloudTime ? localItem : cloudItem);
               stats.identical++;
             } else {
-              // Content differs between local and cloud -> conflict
-              conflicts.push({
-                id: localItem.id,
-                type: key,
-                name: localItem.name || cloudItem.name || localItem.id,
-                local: localItem,
-                cloud: cloudItem,
-                keep: localTime >= cloudTime ? "local" : "cloud"
-              });
-              stats.conflicted++;
-              result.push(localTime >= cloudTime ? localItem : cloudItem);
+              // Content differs between local and cloud
+              // Check if both devices modified this record independently AFTER the last known sync (true concurrent edit)
+              const isConcurrentEdit = lastSyncTime > 0 && localTime > lastSyncTime && cloudTime > lastSyncTime;
+
+              if (isConcurrentEdit) {
+                // Genuine concurrent offline edit on two devices
+                conflicts.push({
+                  id: localItem.id,
+                  type: key,
+                  name: localItem.name || cloudItem.name || localItem.id,
+                  local: localItem,
+                  cloud: cloudItem,
+                  keep: localTime >= cloudTime ? "local" : "cloud"
+                });
+                stats.conflicted++;
+                result.push(localTime >= cloudTime ? localItem : cloudItem);
+              } else if (cloudTime > localTime) {
+                // Cloud is newer (e.g. edited on another workstation, or local was untouched initial/mock cache)
+                result.push(cloudItem);
+                stats.cloudAdded++;
+              } else {
+                // Local is newer or tied
+                result.push(localItem);
+                stats.localAdded++;
+              }
             }
           }
           cloudMap.delete(localItem.id);
@@ -1176,8 +1204,151 @@ export class StudentStore {
     return { merged, conflicts, stats };
   }
 
+  // Direct immediate write to Google Drive without debounce
+  async saveToCloudDirect(payload) {
+    if (!this.isTokenValid()) return;
+    try {
+      this.updateState({ syncStatus: "saving" });
+      
+      let folderId = this.state.aegisFolderId;
+      if (!folderId) {
+        folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
+        if (!folderId) folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
+        this.updateState({ aegisFolderId: folderId });
+      }
+
+      let allDataFid = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+      if (allDataFid) {
+        await driveService.updateFile(this.state.accessToken, allDataFid, payload);
+      } else {
+        allDataFid = await driveService.createFile(this.state.accessToken, "all-data.json", payload, folderId);
+      }
+
+      let parentFid = await driveService.findFile(this.state.accessToken, "parent-portal.json", folderId);
+      const parentPayload = driveService.segregateParentData(payload);
+      if (parentFid) {
+        await driveService.updateFile(this.state.accessToken, parentFid, parentPayload);
+      } else {
+        parentFid = await driveService.createFile(this.state.accessToken, "parent-portal.json", parentPayload, folderId);
+      }
+
+      this.updateState({
+        allDataFileId: allDataFid,
+        parentPortalFileId: parentFid,
+        syncStatus: "synced",
+        lastSyncedAt: new Date().toISOString(),
+        flashingGreen: true
+      });
+      setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+    } catch (err) {
+      console.error("Direct cloud save error", err);
+      this.updateState({ syncStatus: "error", syncError: `Save failed: ${err.message}` });
+    }
+  }
+
+  // Force Download: Replaces local database completely with cloud master
+  async forceDownloadFromCloud() {
+    if (!this.isTokenValid()) {
+      this.connectGoogleDrive();
+      return;
+    }
+    try {
+      this.updateState({ syncStatus: "connecting", syncError: null });
+      const folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
+      if (!folderId) throw new Error("Aegis folder not found in Google Drive.");
+      const fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+      if (!fileId) throw new Error("all-data.json not found in Google Drive.");
+
+      const cloudData = await driveService.readFile(this.state.accessToken, fileId);
+      
+      this.updateState({
+        allDataFileId: fileId,
+        aegisFolderId: folderId,
+        students: cloudData.students || this.state.students,
+        screenings: cloudData.screenings || this.state.screenings,
+        workEmail: cloudData.workEmail || this.state.workEmail,
+        emailAlertsEnabled: cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : this.state.emailAlertsEnabled,
+        calendarSyncEnabled: cloudData.calendarSyncEnabled !== undefined ? cloudData.calendarSyncEnabled : this.state.calendarSyncEnabled,
+        teacherEmails: cloudData.teacherEmails || this.state.teacherEmails,
+        reportCardDates: cloudData.reportCardDates || this.state.reportCardDates,
+        deadlines: cloudData.deadlines || this.state.deadlines,
+        holidays: cloudData.holidays || this.state.holidays,
+        syncStatus: "synced",
+        lastSyncedAt: new Date().toISOString(),
+        conflicts: [],
+        mergedData: null,
+        flashingGreen: true,
+        toastMessage: "Fresh master copy downloaded from Google Drive.",
+        toastType: "sync",
+        hasUndoBackup: false
+      });
+      setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+    } catch (err) {
+      this.updateState({ syncStatus: "error", syncError: `Download Failed: ${err.message}` });
+    }
+  }
+
+  // Force Upload: Overwrites cloud database with current local records
+  async forceUploadToCloud() {
+    if (!this.isTokenValid()) {
+      this.connectGoogleDrive();
+      return;
+    }
+    const nowIso = new Date().toISOString();
+    const updatedStudents = this.state.students.map(s => ({ ...s, updatedAt: nowIso }));
+    const updatedScreenings = this.state.screenings.map(s => ({ ...s, updatedAt: nowIso }));
+
+    this.updateState({
+      students: updatedStudents,
+      screenings: updatedScreenings,
+      syncStatus: "saving"
+    });
+
+    await this.saveToCloudDirect({
+      students: updatedStudents,
+      screenings: updatedScreenings,
+      workEmail: this.state.workEmail,
+      emailAlertsEnabled: this.state.emailAlertsEnabled,
+      calendarSyncEnabled: this.state.calendarSyncEnabled,
+      teacherEmails: this.state.teacherEmails,
+      reportCardDates: this.state.reportCardDates,
+      deadlines: this.state.deadlines,
+      holidays: this.state.holidays
+    });
+
+    this.updateState({
+      toastMessage: "Local records uploaded to Google Drive as master copy.",
+      toastType: "sync"
+    });
+  }
+
+  // Reset local cache & re-download from Google Drive
+  async resetLocalDatabase() {
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.removeItem("aegis_students");
+        localStorage.removeItem("aegis_screenings");
+        localStorage.removeItem("aegis_all_data_fid");
+        localStorage.removeItem("aegis_parent_fid");
+        localStorage.removeItem("aegis_folder_id");
+        localStorage.removeItem("aegis_last_synced_at");
+      } catch (e) {}
+    }
+    if (this.isTokenValid()) {
+      await this.forceDownloadFromCloud();
+    } else {
+      this.updateState({
+        students: INITIAL_STUDENTS,
+        screenings: INITIAL_SCREENINGS,
+        syncStatus: "disconnected",
+        toastMessage: "Local database reset to defaults.",
+        toastType: "info"
+      });
+    }
+  }
+
   // Apply resolution from conflict modal
-  applyResolution(conflicts, resolveAllNewest = false) {
+  async applyResolution(conflicts, resolveAllNewest = false) {
     // Save snapshot for Undo
     this.lastSyncBackup = {
       students: JSON.parse(JSON.stringify(this.state.students)),
@@ -1187,6 +1358,7 @@ export class StudentStore {
 
     let currentStudents = [...this.state.students];
     let currentScreenings = [...this.state.screenings];
+    const nowIso = new Date().toISOString();
 
     (conflicts || []).forEach(c => {
       let chosen;
@@ -1197,6 +1369,9 @@ export class StudentStore {
       } else {
         chosen = c.keep === "cloud" ? c.cloud : c.local;
       }
+
+      // Stamped with current resolution timestamp
+      chosen = { ...chosen, updatedAt: nowIso };
 
       if (c.type === "students") {
         const idx = currentStudents.findIndex(s => s.id === c.id);
@@ -1221,6 +1396,7 @@ export class StudentStore {
       syncStatus: "synced",
       conflicts: [],
       mergedData: null,
+      lastSyncedAt: nowIso,
       flashingGreen: true,
       toastMessage: `Resolved ${(conflicts || []).length} sync conflict(s) & updated Google Drive.`,
       toastType: "sync",
@@ -1229,8 +1405,24 @@ export class StudentStore {
 
     setTimeout(() => this.updateState({ flashingGreen: false }), 800);
 
-    // Push merged resolved data back to Google Drive immediately
-    this.triggerCloudSave();
+    // Cancel any pending debounce timer
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
+    // Direct immediate save to Google Drive
+    await this.saveToCloudDirect({
+      students: currentStudents,
+      screenings: currentScreenings,
+      workEmail: this.state.workEmail,
+      emailAlertsEnabled: this.state.emailAlertsEnabled,
+      calendarSyncEnabled: this.state.calendarSyncEnabled,
+      teacherEmails: this.state.teacherEmails,
+      reportCardDates: this.state.reportCardDates,
+      deadlines: this.state.deadlines,
+      holidays: this.state.holidays
+    });
   }
 
   // Smart cloud sync method that merges instead of overwriting
