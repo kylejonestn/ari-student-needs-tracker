@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StudentStore, getDifferences, normalizeToISODate } from "./studentStore.js";
+import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines } from "./studentStore.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -354,6 +354,28 @@ describe("Smart Cloud Sync - Deletions & Tombstones", () => {
     const mergedStu1 = merged.students.find(s => s.id === "stu-1");
 
     assert.equal(mergedStu1.deleted, true, "Newer cloud deletion must win");
+  });
+
+  it("should mark screening as Archived and deleted when removeScreening is called", () => {
+    const store = new StudentStore();
+    store.state.screenings = [
+      { id: "scr-1", name: "Screening Student", status: "Pending Discontinuation" }
+    ];
+
+    store.removeScreening("scr-1");
+
+    const scr = store.state.screenings.find(s => s.id === "scr-1");
+    assert.equal(scr.deleted, true);
+    assert.equal(scr.status, "Archived");
+    assert.ok(scr.updatedAt);
+  });
+
+  it("should return empty timelines for archived or placed screenings", () => {
+    const archivedScreening = { id: "scr-arch", name: "Archived Student", status: "Archived", deleted: true };
+    const placedScreening = { id: "scr-placed", name: "Placed Student", status: "Placed", deleted: true };
+
+    assert.deepEqual(calculateTimelines(archivedScreening, true), []);
+    assert.deepEqual(calculateTimelines(placedScreening, true), []);
   });
 });
 

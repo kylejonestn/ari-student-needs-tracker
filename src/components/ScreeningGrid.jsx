@@ -46,9 +46,11 @@ const phases = [
 ];
 
 export default function ScreeningGrid({ screenings, addScreening, updateScreening, placeStudent }) {
+  const activeScreenings = (screenings || []).filter(s => !s.deleted && s.status !== "Archived" && s.status !== "Placed");
+
   // Read initial selection from store if present
   const globalSelectedId = store.getState().selectedScreeningId;
-  const [selectedScreenId, setSelectedScreenId] = useState(globalSelectedId || screenings[0]?.id || "");
+  const [selectedScreenId, setSelectedScreenId] = useState(globalSelectedId || activeScreenings[0]?.id || "");
   const [showAddReferral, setShowAddReferral] = useState(false);
   
   // Referral Form State
@@ -60,12 +62,14 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
   const [expandedStudentId, setExpandedStudentId] = useState(null);
   const [selectedStepIndexByStudent, setSelectedStepIndexByStudent] = useState({});
 
-  const activeScreening = screenings.find(s => s.id === selectedScreenId);
+  const activeScreening = activeScreenings.find(s => s.id === selectedScreenId) || activeScreenings[0] || null;
 
-  // Sync selected screening if screenings array changes and selection is empty
+  // Sync selected screening if activeScreenings array changes and selection is empty or invalid
   useEffect(() => {
-    if (screenings.length > 0 && !selectedScreenId) {
-      setSelectedScreenId(screenings[0].id);
+    if (activeScreenings.length > 0 && (!selectedScreenId || !activeScreenings.some(s => s.id === selectedScreenId))) {
+      setSelectedScreenId(activeScreenings[0].id);
+    } else if (activeScreenings.length === 0) {
+      setSelectedScreenId("");
     }
   }, [screenings, selectedScreenId]);
 
@@ -162,14 +166,15 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
     if (!student) return;
     placeStudent(student.id, ["Curriculum Compacting", "Advanced Academic Pacing"]);
     
+    // Clear expanded panel if this student was expanded
+    if (expandedStudentId === student.id) {
+      setExpandedStudentId(null);
+    }
+
     // Reset selected screen if active student was placed
     if (activeScreening && activeScreening.id === student.id) {
-      const remaining = screenings.filter(s => s.id !== student.id);
-      if (remaining.length > 0) {
-        setSelectedScreenId(remaining[0].id);
-      } else {
-        setSelectedScreenId("");
-      }
+      const remaining = activeScreenings.filter(s => s.id !== student.id);
+      setSelectedScreenId(remaining[0]?.id || "");
     }
     
     alert(`${student.name} has been successfully evaluated and placed into the Active Gifted Student directory! An initial IEP timeline has been scheduled due in 30 days.`);
@@ -388,8 +393,14 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
     }
     const name = student.name;
     
+    // Clear expanded panel if this student was expanded
+    if (expandedStudentId === student.id) {
+      setExpandedStudentId(null);
+    }
+
     if (activeScreening && activeScreening.id === student.id) {
-      setSelectedScreenId("");
+      const remaining = activeScreenings.filter(s => s.id !== student.id);
+      setSelectedScreenId(remaining[0]?.id || "");
     }
     
     store.removeScreening(student.id);
@@ -1335,10 +1346,10 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                 }}
                 style={{ minWidth: "200px" }}
               >
-                {screenings.map(s => (
+                {activeScreenings.map(s => (
                   <option key={s.id} value={s.id}>{s.name} ({s.grade})</option>
                 ))}
-                {screenings.length === 0 && <option value="">No Active Screenings</option>}
+                {activeScreenings.length === 0 && <option value="">No Active Screenings</option>}
               </select>
             </div>
           )}
@@ -1402,7 +1413,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
       {/* Rendering Modes */}
       {viewMode === "timeline" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {screenings.map(student => {
+          {activeScreenings.map(student => {
             const isExpanded = expandedStudentId === student.id;
             const currentStageIndex = phases.indexOf(student.status);
             const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
@@ -1461,7 +1472,8 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
             }
 
             // Get selected step index in panel
-            const selectedStep = selectedStepIndexByStudent[student.id] ?? (student.status === "Pending Discontinuation" ? 7 : currentStageIndex);
+            const defaultStep = student.status === "Pending Discontinuation" ? 7 : (currentStageIndex >= 0 ? currentStageIndex : 0);
+            const selectedStep = selectedStepIndexByStudent[student.id] ?? defaultStep;
 
             return (
               <div 
@@ -1509,7 +1521,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                         if (!isExpanded) {
                           setSelectedStepIndexByStudent(prev => ({
                             ...prev,
-                            [student.id]: student.status === "Pending Discontinuation" ? 7 : currentStageIndex
+                            [student.id]: student.status === "Pending Discontinuation" ? 7 : (currentStageIndex >= 0 ? currentStageIndex : 0)
                           }));
                         }
                       }}
@@ -1610,7 +1622,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
                       <h4 style={{ fontSize: "14px", fontWeight: "700", color: "var(--accent-purple)" }}>
                         {student.status === "Pending Discontinuation" 
                           ? "Discontinuation Tasks" 
-                          : `Workflow Step Details: ${timelineStages[selectedStep].label}`}
+                          : `Workflow Step Details: ${timelineStages[selectedStep]?.label || "Screening Step"}`}
                       </h4>
                     </div>
                     {renderStepContent(student, selectedStep)}
@@ -1619,9 +1631,9 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
               </div>
             );
           })}
-          {screenings.length === 0 && (
+          {activeScreenings.length === 0 && (
             <div style={{ textAlign: "center", padding: "60px", color: "var(--text-muted)" }} className="glass-panel">
-              <p>No screening profiles loaded. Add a student using the "Log Initial Referral" form.</p>
+              <p>No active screening profiles loaded. Add a student using the "Log Initial Referral" form.</p>
             </div>
           )}
         </div>

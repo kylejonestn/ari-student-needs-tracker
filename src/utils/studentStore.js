@@ -200,7 +200,7 @@ export const guessTeacherEmail = (name) => {
  * Calculates Tennessee regulatory and facilitator buffers timelines
  */
 export const calculateTimelines = (student, isScreening = false) => {
-  if (!student || student.deleted || student.status === "Deleted" || (!isScreening && student.status !== "Active")) {
+  if (!student || student.deleted || student.status === "Deleted" || student.status === "Archived" || student.status === "Placed" || (!isScreening && student.status !== "Active")) {
     return [];
   }
   const timelines = [];
