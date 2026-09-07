@@ -2,7 +2,7 @@
    Aegis Gifted Tracker - Main App Assembler
    ========================================== */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { store } from "./utils/studentStore";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
@@ -55,6 +55,63 @@ export default function App() {
       store.updateState({ activeTab: "iep" });
     }
   }, [activeTab]);
+
+  const toastTimeoutRef = useRef(null);
+  const isToastHoveredRef = useRef(false);
+
+  // Auto-dismiss toast notification after 4 seconds of page activity (mouse movement or scrolling)
+  useEffect(() => {
+    if (!toastMessage) {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+        toastTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const clearToast = () => {
+      store.updateState({
+        toastMessage: "",
+        toastStudentId: null,
+        toastQuarter: null,
+        hasUndoBackup: false
+      });
+    };
+
+    const startDismissTimer = () => {
+      if (isToastHoveredRef.current) return;
+      if (!toastTimeoutRef.current) {
+        toastTimeoutRef.current = setTimeout(() => {
+          clearToast();
+        }, 4000);
+      }
+    };
+
+    const handleUserActivity = () => {
+      startDismissTimer();
+    };
+
+    window.addEventListener("mousemove", handleUserActivity, { passive: true });
+    window.addEventListener("scroll", handleUserActivity, { passive: true });
+    window.addEventListener("wheel", handleUserActivity, { passive: true });
+    window.addEventListener("touchmove", handleUserActivity, { passive: true });
+    window.addEventListener("keydown", handleUserActivity, { passive: true });
+
+    // Start 4s timer upon appearance
+    startDismissTimer();
+
+    return () => {
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+        toastTimeoutRef.current = null;
+      }
+      window.removeEventListener("mousemove", handleUserActivity);
+      window.removeEventListener("scroll", handleUserActivity);
+      window.removeEventListener("wheel", handleUserActivity);
+      window.removeEventListener("touchmove", handleUserActivity);
+      window.removeEventListener("keydown", handleUserActivity);
+    };
+  }, [toastMessage]);
 
   // Header Title Resolver
   const getPageDetails = () => {
@@ -284,6 +341,26 @@ export default function App() {
       {/* Global Toast Notification */}
       {toastMessage && (
         <div 
+          onMouseEnter={() => {
+            isToastHoveredRef.current = true;
+            if (toastTimeoutRef.current) {
+              clearTimeout(toastTimeoutRef.current);
+              toastTimeoutRef.current = null;
+            }
+          }}
+          onMouseLeave={() => {
+            isToastHoveredRef.current = false;
+            if (!toastTimeoutRef.current) {
+              toastTimeoutRef.current = setTimeout(() => {
+                store.updateState({
+                  toastMessage: "",
+                  toastStudentId: null,
+                  toastQuarter: null,
+                  hasUndoBackup: false
+                });
+              }, 4000);
+            }
+          }}
           style={{
             position: "fixed",
             bottom: "24px",
