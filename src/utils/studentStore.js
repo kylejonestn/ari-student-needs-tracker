@@ -1429,8 +1429,8 @@ export class StudentStore {
     });
   }
 
-  // Smart cloud sync method that merges instead of overwriting
-  async syncToCloud(isSilent = false) {
+  // Smart cloud sync method that merges instead of overwriting with Optimistic Concurrency Control
+  async syncToCloud(isSilent = false, retryCount = 0) {
     if (!this.isTokenValid()) {
       this.connectGoogleDrive();
       return;
@@ -1475,6 +1475,12 @@ export class StudentStore {
         return { merged: this.state, conflicts: [], stats: { localAdded: 0, cloudAdded: 0 } };
       }
 
+      // 1. Capture file modification timestamp before read
+      let initialMeta = null;
+      try {
+        initialMeta = await driveService.getFileMeta(this.state.accessToken, fileId);
+      } catch (e) {}
+
       const cloudData = await driveService.readFile(this.state.accessToken, fileId);
       const { merged, conflicts, stats } = this.mergeWithCloud(this.state, cloudData);
 
@@ -1485,6 +1491,21 @@ export class StudentStore {
           mergedData: merged
         });
         return { merged, conflicts, stats };
+      }
+
+      // 2. Concurrency Check: verify if another device saved to Google Drive while we were preparing
+      if (initialMeta && initialMeta.modifiedTime && retryCount < 3) {
+        try {
+          const preSaveMeta = await driveService.getFileMeta(this.state.accessToken, fileId);
+          if (preSaveMeta && preSaveMeta.modifiedTime && preSaveMeta.modifiedTime !== initialMeta.modifiedTime) {
+            console.log(`[Aegis Sync] Concurrent write detected on another workstation. Auto-merging fresh changes (attempt ${retryCount + 1})...`);
+            // Brief random jitter (100ms - 300ms) to allow the other device's write to settle
+            await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+            return this.syncToCloud(isSilent, retryCount + 1);
+          }
+        } catch (e) {
+          console.warn("[Aegis Sync] Concurrency check bypassed", e);
+        }
       }
 
       // Save pre-sync backup for instant Undo

@@ -169,6 +169,26 @@ export const driveService = {
   },
 
   /**
+   * Get metadata for a file in Google Drive (modifiedTime, version).
+   */
+  async getFileMeta(accessToken, fileId) {
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,modifiedTime,version`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Google Drive File Meta Error: ${response.status} - ${errText}`);
+    }
+
+    return await response.json();
+  },
+
+  /**
    * Create a new file in Google Drive inside a parent folder in two phases:
    * 1. Create file metadata with parents to obtain a fileId.
    * 2. Upload the JSON content payload.
