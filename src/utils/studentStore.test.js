@@ -434,3 +434,30 @@ describe("Date Normalization - normalizeToISODate", () => {
   });
 });
 
+describe("Timeline Calculations - Status Categorization", () => {
+  it("should mark negative days remaining as overdue rather than warning for screenings", () => {
+    // Student with referral date in the distant past (e.g. 88 days ago)
+    const pastScreening = {
+      id: "scr-past",
+      name: "Past Screening Student",
+      status: "Quick Survey",
+      referralDate: "2026-01-01"
+    };
+
+    const timelines = calculateTimelines(pastScreening, true);
+    assert.ok(timelines.length > 0, "Should generate timeline");
+    const quickSurvey = timelines.find(t => t.type === "Quick Survey");
+    assert.ok(quickSurvey, "Quick Survey timeline should exist");
+    assert.ok(quickSurvey.daysRemaining < 0, "Days remaining should be negative");
+    assert.equal(quickSurvey.status, "overdue", "Status should be overdue, NOT warning");
+  });
+
+  it("should return empty timelines for Archived, Placed, or Deleted students", () => {
+    assert.deepEqual(calculateTimelines({ id: "1", status: "Archived" }, true), []);
+    assert.deepEqual(calculateTimelines({ id: "2", status: "Placed" }, true), []);
+    assert.deepEqual(calculateTimelines({ id: "3", status: "Quick Survey", deleted: true }, true), []);
+    assert.deepEqual(calculateTimelines({ id: "4", status: "Archived" }, false), []);
+    assert.deepEqual(calculateTimelines({ id: "5", status: "Active", deleted: true }, false), []);
+  });
+});
+

@@ -214,13 +214,14 @@ export const calculateTimelines = (student, isScreening = false) => {
     // Status 1: Quick Survey (Cume File Check)
     if (student.status === "Quick Survey") {
       const dueDate = addSchoolDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningQuickSurvey);
+      const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Quick Survey",
         label: "Cume File Quick Survey",
         desc: "Check for prior testing locks, ESL status, DCS issues, and school attendance logs.",
         dueDate,
-        daysRemaining: getDaysRemaining(dueDate),
-        status: getDaysRemaining(dueDate) <= 2 ? "warning" : "on-track",
+        daysRemaining: days,
+        status: days < 0 ? "overdue" : days <= 2 ? "warning" : "on-track",
         mandatory: false,
         actionNeeded: "Review Cume File"
       });
@@ -229,13 +230,14 @@ export const calculateTimelines = (student, isScreening = false) => {
     // Status 2: Consent Pending
     if (student.status === "Consent Pending") {
       const dueDate = addDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningConsentPending);
+      const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Consent Pending",
         label: "Awaiting Parental Consent",
         desc: "Parental permission to screen and initial screening surveys sent home.",
         dueDate,
-        daysRemaining: getDaysRemaining(dueDate),
-        status: getDaysRemaining(dueDate) <= 2 ? "warning" : "on-track",
+        daysRemaining: days,
+        status: days < 0 ? "overdue" : days <= 2 ? "warning" : "on-track",
         mandatory: false
       });
     }
@@ -319,13 +321,14 @@ export const calculateTimelines = (student, isScreening = false) => {
     // Status 5: Permission to Test Pending
     if (student.status === "Permission to Test Pending" && !student.permissionToTestReceivedDate) {
       const dueDate = addDays(new Date().toISOString().split("T")[0], deadlines.screeningPermissionToTest);
+      const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Permission to Test",
         label: "Awaiting Psychologist Consent",
         desc: "Waiting for signed permission to test and permission to email legal documents to return.",
         dueDate,
-        daysRemaining: getDaysRemaining(dueDate),
-        status: getDaysRemaining(dueDate) <= 2 ? "warning" : "on-track",
+        daysRemaining: days,
+        status: days < 0 ? "overdue" : days <= 2 ? "warning" : "on-track",
         mandatory: false
       });
     }
@@ -354,7 +357,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           desc: "Check if testing is scheduled. Psychologist typically tests within 15-20 days.",
           dueDate: checkinDate,
           daysRemaining: checkinDays,
-          status: checkinDays <= 0 ? "warning" : "on-track",
+          status: checkinDays < 0 ? "overdue" : checkinDays <= 3 ? "warning" : "on-track",
           mandatory: false
         });
       }
@@ -551,13 +554,14 @@ export const calculateTimelines = (student, isScreening = false) => {
         // Finalize IEP (5 days legal / 1 day Ariel)
         if (!student.iepFinalizedDate) {
           const finDue = addDays(student.iepMeetingDate, 1);
+          const finDays = getDaysRemaining(finDue);
           timelines.push({
             type: "IEP Finalization",
             label: "Finalize Pulse IEP",
             desc: "Submit and lock finalized IEP document. Legal deadline: 5 days post-meeting.",
             dueDate: finDue,
-            daysRemaining: getDaysRemaining(finDue),
-            status: getDaysRemaining(finDue) <= 0 ? "overdue" : "warning",
+            daysRemaining: finDays,
+            status: finDays < 0 ? "overdue" : "warning",
             mandatory: true
           });
         }
@@ -565,13 +569,14 @@ export const calculateTimelines = (student, isScreening = false) => {
         // Print IEP at a Glance (next day)
         if (student.iepFinalizedDate && !student.iepAtAGlancePrinted) {
           const printDue = addDays(student.iepFinalizedDate, 1);
+          const printDays = getDaysRemaining(printDue);
           timelines.push({
             type: "IEP Print Glance",
             label: "Print IEP at a Glance",
             desc: "Generate and print 1-page teacher summary report.",
             dueDate: printDue,
-            daysRemaining: getDaysRemaining(printDue),
-            status: getDaysRemaining(printDue) <= 0 ? "overdue" : "warning",
+            daysRemaining: printDays,
+            status: printDays < 0 ? "overdue" : "warning",
             mandatory: false,
             actionNeeded: "Print Glance"
           });

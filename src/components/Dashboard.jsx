@@ -148,9 +148,8 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   const overdueCount = rawTimelines.filter(t => t.status === "overdue").length;
   const warningCount = rawTimelines.filter(t => t.status === "warning").length;
 
-  // Filter for: Overdue OR Due within the current calendar week (Sunday or Monday)
-  // Current calendar week (Monday to Sunday)
-  const allTimelines = rawTimelines.filter(t => {
+  // Filter for: Overdue OR Due within the current calendar week (Monday to Sunday)
+  const thisWeekTimelines = rawTimelines.filter(t => {
     // 1. Show overdue items instantly
     if (t.daysRemaining !== null && t.daysRemaining < 0) return true;
     
@@ -175,13 +174,15 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     dueDateObj.setHours(0, 0, 0, 0);
     
     return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
-  }).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
-
-  const displayedTimelines = allTimelines.filter(t => {
-    if (timelineFilter === "warning") return t.status === "warning";
-    if (timelineFilter === "overdue") return t.status === "overdue";
-    return true;
   });
+
+  const displayedTimelines = (
+    timelineFilter === "warning"
+      ? rawTimelines.filter(t => t.status === "warning")
+      : timelineFilter === "overdue"
+      ? rawTimelines.filter(t => t.status === "overdue")
+      : thisWeekTimelines
+  ).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
 
   // Friday bulk signatures checklist students
   const fridaySignatureStudents = students.filter(
@@ -481,12 +482,32 @@ export default function Dashboard({ students, screenings, updateScreening }) {
         <div className="glass-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="timeline-header">
             <div>
-              <h2>Weekly Timeline & Due Summaries</h2>
+              <h2>
+                {timelineFilter === "warning"
+                  ? `Action Warning Timelines (${displayedTimelines.length})`
+                  : timelineFilter === "overdue"
+                  ? `Overdue Timelines (${displayedTimelines.length})`
+                  : "Weekly Timeline & Due Summaries"}
+              </h2>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-                Tennessee Special Education mandate countdowns
+                {timelineFilter === "warning"
+                  ? "Showing all active warning deadlines across caseload and screening evaluations"
+                  : timelineFilter === "overdue"
+                  ? "Showing all overdue deadlines requiring immediate attention"
+                  : "Tennessee Special Education mandate countdowns (Current Week & Overdue)"}
               </p>
             </div>
-            <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>RCS Schedule</span>
+            {timelineFilter && timelineFilter !== "all" ? (
+              <button 
+                className="btn btn-secondary hide-print" 
+                style={{ padding: "4px 8px", fontSize: "11px", height: "fit-content", alignSelf: "flex-start" }}
+                onClick={() => setTimelineFilter("all")}
+              >
+                Clear Filter (Show This Week)
+              </button>
+            ) : (
+              <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>RCS Schedule</span>
+            )}
           </div>
 
           <div className="timeline-actions hide-print">
