@@ -1,0 +1,65 @@
+name: Deploy Aegis Tracker
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Test Suite
+        run: npm test
+
+      # ----------------------------------------------------
+      # PRODUCTION DEPLOYMENT (Pushes to 'main' branch)
+      # Deploys build to root directory (/) on gh-pages
+      # ----------------------------------------------------
+      - name: Build for Production (main)
+        if: github.ref == 'refs/heads/main'
+        run: npm run build
+
+      - name: Deploy Production to Root (gh-pages)
+        if: github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: dist
+          target-folder: .
+          clean: false
+
+      # ----------------------------------------------------
+      # STAGING / DEV DEPLOYMENT (Pushes to 'dev' branch)
+      # Deploys build to /dev subfolder on gh-pages
+      # ----------------------------------------------------
+      - name: Build for Staging (dev)
+        if: github.ref == 'refs/heads/dev'
+        env:
+          DEPLOY_ENV: dev
+        run: npm run build:dev
+
+      - name: Deploy Staging to /dev (gh-pages)
+        if: github.ref == 'refs/heads/dev'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: dist
+          target-folder: dev
+          clean: false

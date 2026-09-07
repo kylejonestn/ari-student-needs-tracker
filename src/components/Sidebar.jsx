@@ -47,7 +47,24 @@ export default function Sidebar({ activeTab, setActiveTab, isParentMode, setIsPa
             <Sparkles size={20} />
           </div>
           <div>
-            <span className="logo-text">Aegis</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span className="logo-text">Aegis</span>
+              {(typeof window !== 'undefined' && window.location.pathname.includes('/dev')) && (
+                <span style={{
+                  fontSize: "9px",
+                  fontWeight: "800",
+                  padding: "2px 5px",
+                  borderRadius: "4px",
+                  background: "linear-gradient(135deg, var(--accent-amber), var(--accent-rose))",
+                  color: "#ffffff",
+                  letterSpacing: "0.5px",
+                  lineHeight: "1",
+                  textTransform: "uppercase"
+                }}>
+                  DEV
+                </span>
+              )}
+            </div>
             <span className="logo-subtitle">BMS Gifted Hub</span>
           </div>
         </div>
