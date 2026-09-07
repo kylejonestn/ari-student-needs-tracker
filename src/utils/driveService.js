@@ -21,7 +21,7 @@ export const driveService = {
     try {
       const tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send", // Access Drive files and send emails
+        scope: "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email", // Access Drive files, send emails, and read connected profile email
         callback: (response) => {
           if (response.error) {
             onError(`Auth failed: ${response.error_description || response.error}`);
@@ -44,11 +44,32 @@ export const driveService = {
   },
 
   /**
+   * Fetch basic Google user profile (email) using current access token.
+   */
+  async getUserInfo(accessToken) {
+    try {
+      const url = "https://www.googleapis.com/oauth2/v3/userinfo";
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch (e) {
+      console.warn("Unable to fetch Google user profile info", e);
+      return null;
+    }
+  },
+
+  /**
    * Search for a folder by name in Google Drive.
+   * Sorts by modifiedTime desc to always retrieve the latest active folder.
    */
   async findFolder(accessToken, folderName) {
     const q = encodeURIComponent(`name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
-    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`;
     
     const response = await fetch(url, {
       method: "GET",
@@ -97,7 +118,7 @@ export const driveService = {
 
   /**
    * Search for a file by name in Google Drive, optionally inside a specific parent folder.
-   * Restricts search to active (not trashed) files.
+   * Restricts search to active (not trashed) files and sorts by modifiedTime desc to pick the newest master.
    */
   async findFile(accessToken, filename, parentId = null) {
     let query = `name = '${filename}' and trashed = false`;
@@ -105,7 +126,7 @@ export const driveService = {
       query += ` and '${parentId}' in parents`;
     }
     const q = encodeURIComponent(query);
-    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`;
     
     const response = await fetch(url, {
       method: "GET",

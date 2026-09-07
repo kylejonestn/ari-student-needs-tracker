@@ -461,3 +461,38 @@ describe("Timeline Calculations - Status Categorization", () => {
   });
 });
 
+describe("Google Drive Multi-Workstation Sync Enhancements", () => {
+  it("should store and update connectedEmail and lastSyncedAt in store state", () => {
+    const store = new StudentStore();
+    const testEmail = "ariel.teacher@rcschools.net";
+    const testTimestamp = new Date().toISOString();
+
+    store.updateState({
+      connectedEmail: testEmail,
+      lastSyncedAt: testTimestamp
+    });
+
+    const state = store.getState();
+    assert.equal(state.connectedEmail, testEmail, "connectedEmail should be set");
+    assert.equal(state.lastSyncedAt, testTimestamp, "lastSyncedAt should be set");
+  });
+
+  it("should clear connectedEmail and lastSyncedAt upon disconnectGoogleDrive", () => {
+    const store = new StudentStore();
+    store.updateState({
+      connectedEmail: "test@example.com",
+      lastSyncedAt: new Date().toISOString(),
+      accessToken: "mock-token",
+      tokenExpiry: Date.now() + 3600000,
+      syncStatus: "synced"
+    });
+
+    store.disconnectGoogleDrive();
+    const state = store.getState();
+    assert.equal(state.connectedEmail, null, "connectedEmail should be null after disconnect");
+    assert.equal(state.lastSyncedAt, null, "lastSyncedAt should be null after disconnect");
+    assert.equal(state.accessToken, null, "accessToken should be null");
+    assert.equal(state.syncStatus, "disconnected", "syncStatus should be disconnected");
+  });
+});
+

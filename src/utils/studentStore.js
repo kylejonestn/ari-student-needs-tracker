@@ -805,6 +805,8 @@ export class StudentStore {
     const savedAccessToken = getStorageItem("aegis_access_token") || null;
     const savedTokenExpiry = getStorageItem("aegis_token_expiry") ? parseInt(getStorageItem("aegis_token_expiry"), 10) : null;
     const isTokenValid = savedAccessToken && savedTokenExpiry && Date.now() < savedTokenExpiry;
+    const savedConnectedEmail = getStorageItem("aegis_connected_email") || null;
+    const savedLastSyncedAt = getStorageItem("aegis_last_synced_at") || null;
 
     this.state = {
       theme: savedTheme,
@@ -813,6 +815,8 @@ export class StudentStore {
       syncError: null,
       accessToken: isTokenValid ? savedAccessToken : null,
       tokenExpiry: isTokenValid ? savedTokenExpiry : null,
+      connectedEmail: savedConnectedEmail,
+      lastSyncedAt: savedLastSyncedAt,
       allDataFileId: getStorageItem("aegis_all_data_fid") || null,
       parentPortalFileId: getStorageItem("aegis_parent_fid") || null,
       aegisFolderId: getStorageItem("aegis_folder_id") || null,
@@ -858,6 +862,27 @@ export class StudentStore {
       setTimeout(() => {
         this.syncFromGoogleDrive();
       }, 50);
+    }
+
+    // Auto-sync when window gains focus or tab becomes visible (cross-workstation sync)
+    if (typeof window !== "undefined") {
+      let lastFocusSync = 0;
+      const handleWindowFocus = () => {
+        const now = Date.now();
+        // Throttle to at most once every 30 seconds
+        if (now - lastFocusSync > 30000 && this.isTokenValid()) {
+          lastFocusSync = now;
+          this.syncToCloud();
+        }
+      };
+      window.addEventListener("focus", handleWindowFocus);
+      if (typeof document !== "undefined") {
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") {
+            handleWindowFocus();
+          }
+        });
+      }
     }
   }
 
@@ -909,6 +934,20 @@ export class StudentStore {
             localStorage.removeItem("aegis_token_expiry");
           }
         }
+        if (newState.connectedEmail !== undefined) {
+          if (newState.connectedEmail) {
+            localStorage.setItem("aegis_connected_email", newState.connectedEmail);
+          } else {
+            localStorage.removeItem("aegis_connected_email");
+          }
+        }
+        if (newState.lastSyncedAt !== undefined) {
+          if (newState.lastSyncedAt) {
+            localStorage.setItem("aegis_last_synced_at", newState.lastSyncedAt);
+          } else {
+            localStorage.removeItem("aegis_last_synced_at");
+          }
+        }
         
         // Save database cache in localStorage for instant offline access
         localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
@@ -944,9 +983,20 @@ export class StudentStore {
     driveService.requestAccessToken(
       clientId,
       async (token, expiry) => {
+        let email = null;
+        try {
+          const userInfo = await driveService.getUserInfo(token);
+          if (userInfo && userInfo.email) {
+            email = userInfo.email;
+          }
+        } catch (e) {
+          console.warn("Could not fetch user info", e);
+        }
+
         this.updateState({
           accessToken: token,
-          tokenExpiry: expiry
+          tokenExpiry: expiry,
+          ...(email ? { connectedEmail: email } : {})
         });
         
         await this.syncFromGoogleDrive();
@@ -959,17 +1009,25 @@ export class StudentStore {
 
   // Disconnect Drive
   disconnectGoogleDrive() {
-    localStorage.removeItem("aegis_all_data_fid");
-    localStorage.removeItem("aegis_parent_fid");
-    localStorage.removeItem("aegis_folder_id");
-    localStorage.removeItem("aegis_access_token");
-    localStorage.removeItem("aegis_token_expiry");
+    if (typeof localStorage !== "undefined") {
+      try {
+        localStorage.removeItem("aegis_all_data_fid");
+        localStorage.removeItem("aegis_parent_fid");
+        localStorage.removeItem("aegis_folder_id");
+        localStorage.removeItem("aegis_access_token");
+        localStorage.removeItem("aegis_token_expiry");
+        localStorage.removeItem("aegis_connected_email");
+        localStorage.removeItem("aegis_last_synced_at");
+      } catch (e) {}
+    }
     this.updateState({
       accessToken: null,
       tokenExpiry: null,
       allDataFileId: null,
       parentPortalFileId: null,
       aegisFolderId: null,
+      connectedEmail: null,
+      lastSyncedAt: null,
       syncStatus: "disconnected",
       syncError: null
     });
@@ -1184,21 +1242,21 @@ export class StudentStore {
     try {
       this.updateState({ syncStatus: "connecting", syncError: null });
       
-      let folderId = this.state.aegisFolderId || localStorage.getItem("aegis_folder_id");
+      // Dynamic single-file resolution: query Drive directly to find active Aegis folder
+      let folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
       if (!folderId) {
-        folderId = await driveService.findFolder(this.state.accessToken, "Aegis");
-        if (!folderId) {
-          folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
-        }
-        this.updateState({ aegisFolderId: folderId });
+        folderId = await driveService.createFolder(this.state.accessToken, "Aegis");
       }
+      this.updateState({ aegisFolderId: folderId });
 
-      let fileId = this.state.allDataFileId || await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
+      // Find the active all-data.json master file
+      let fileId = await driveService.findFile(this.state.accessToken, "all-data.json", folderId);
       if (!fileId) {
         // No cloud file exists yet -> save current state as cloud master
         this.triggerCloudSave();
         this.updateState({
           syncStatus: "synced",
+          lastSyncedAt: new Date().toISOString(),
           flashingGreen: true,
           toastMessage: "Google Drive connected: Caseload uploaded.",
           toastType: "sync",
@@ -1237,6 +1295,13 @@ export class StudentStore {
         syncMessage = `Synced: Pulled ${stats.cloudAdded} new profile(s) from Google Drive.`;
       }
 
+      // If connectedEmail is not yet fetched, fetch it in background
+      if (!this.state.connectedEmail) {
+        driveService.getUserInfo(this.state.accessToken).then(info => {
+          if (info && info.email) this.updateState({ connectedEmail: info.email });
+        }).catch(() => {});
+      }
+
       // No conflicts -> apply merged data and immediately update cloud
       this.updateState({
         allDataFileId: fileId,
@@ -1251,6 +1316,7 @@ export class StudentStore {
         deadlines: merged.deadlines || this.state.deadlines,
         holidays: merged.holidays || this.state.holidays,
         syncStatus: "synced",
+        lastSyncedAt: new Date().toISOString(),
         conflicts: [],
         mergedData: null,
         flashingGreen: true,
@@ -1288,6 +1354,7 @@ export class StudentStore {
       students: students || this.state.students,
       screenings: screenings || this.state.screenings,
       syncStatus: "synced",
+      lastSyncedAt: new Date().toISOString(),
       toastMessage: "Sync undone: Local records restored to pre-sync state.",
       toastType: "info",
       hasUndoBackup: false,
@@ -1360,7 +1427,11 @@ export class StudentStore {
           this.updateState({ parentPortalFileId: newParentFid });
         }
 
-        this.updateState({ syncStatus: "synced", flashingGreen: true });
+        this.updateState({
+          syncStatus: "synced",
+          lastSyncedAt: new Date().toISOString(),
+          flashingGreen: true
+        });
         
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
       } catch (err) {

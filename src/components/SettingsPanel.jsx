@@ -424,6 +424,20 @@ export default function SettingsPanel({
     return Math.max(0, Math.ceil(diff / (1000 * 60)));
   };
 
+  const formatSyncTime = (isoString) => {
+    if (!isoString) return "Not synced yet";
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + " (" + d.toLocaleDateString() + ")";
+    } catch (e) {
+      return isoString;
+    }
+  };
+
+  const storeState = store.getState();
+  const connectedEmail = storeState.connectedEmail;
+  const lastSyncedAt = storeState.lastSyncedAt;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* Two Column Settings */}
@@ -439,7 +453,7 @@ export default function SettingsPanel({
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: 0 }}>
-                Aegis will automatically create a dedicated folder named <strong>"Aegis"</strong> in your Google Drive and save your secure tracker databases inside it.
+                Aegis automatically maintains a synchronized single-file database named <strong>all-data.json</strong> in your Google Drive <strong>"Aegis"</strong> folder across all computers.
               </p>
 
               {/* Connection state HUD info */}
@@ -458,17 +472,33 @@ export default function SettingsPanel({
                            syncStatus === "saving" ? "var(--accent-purple)" : 
                            syncStatus === "connecting" ? "var(--accent-amber)" : "var(--accent-rose)"
                   }}>
-                    {syncStatus.toUpperCase()}
+                    {syncStatus.toUpperCase()} {syncStatus === "synced" ? "🟢" : ""}
                   </span>
                 </div>
                 {accessToken && (
                   <>
+                    {connectedEmail && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                        <span>Connected Account:</span>
+                        <span style={{ fontWeight: "600", color: "var(--accent-purple)" }}>{connectedEmail}</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <span>Cloud Database:</span>
+                      <span style={{ fontWeight: "600", fontFamily: "monospace", fontSize: "12px" }}>Aegis / all-data.json</span>
+                    </div>
+                    {lastSyncedAt && (
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                        <span>Last Synced:</span>
+                        <span style={{ fontWeight: "600" }}>{formatSyncTime(lastSyncedAt)}</span>
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                       <span>OAuth Token Expires:</span>
                       <span style={{ fontWeight: "600" }}>{getMinutesRemaining()} mins</span>
                     </div>
-                    <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                      Using Google Scope: <code style={{ fontSize: "10px" }}>drive.file</code> (Authorized to only access the <strong>Aegis</strong> folder and files created by this app)
+                    <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                      Authorized Scopes: <code style={{ fontSize: "10px" }}>drive.file</code>, <code style={{ fontSize: "10px" }}>gmail.send</code>, <code style={{ fontSize: "10px" }}>userinfo.email</code>
                     </div>
                   </>
                 )}

@@ -32,6 +32,8 @@ export default function App() {
     flashingGreen,
     accessToken,
     tokenExpiry,
+    connectedEmail,
+    lastSyncedAt,
     toastMessage,
     toastType,
     hasUndoBackup,
@@ -89,6 +91,11 @@ export default function App() {
 
   // Render Cloud HUD component
   const renderSyncHUD = () => {
+    const syncTimeStr = lastSyncedAt ? new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+    const syncedTooltip = lastSyncedAt 
+      ? `Database synced with Google Drive (Aegis/all-data.json).\nLast synced: ${syncTimeStr}\nAccount: ${connectedEmail || "Google Account"}\nClick to force sync now.`
+      : "Database synced with Google Drive. Click to sync and merge.";
+
     switch (syncStatus) {
       case "conflict":
         return (
@@ -107,7 +114,7 @@ export default function App() {
           <div 
             className={`sync-hud synced ${flashingGreen ? "flash-green" : ""}`}
             onClick={() => store.syncToCloud()}
-            title="Database synced with Google Drive. Click to sync and merge."
+            title={syncedTooltip}
           >
             <Check size={14} />
             <span>Synced</span>
