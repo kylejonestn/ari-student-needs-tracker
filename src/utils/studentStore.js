@@ -1074,15 +1074,19 @@ export class StudentStore {
       const result = [];
 
       localArr.forEach(localItem => {
+        const localTime = new Date(localItem.updatedAt || 0).getTime();
         const cloudItem = cloudMap.get(localItem.id);
         if (!cloudItem) {
-          // Local only -> preserve in merged dataset
-          result.push(localItem);
-          if (!localItem.deleted && localItem.status !== "Deleted") {
-            stats.localAdded++;
+          // Local only item:
+          // Preserve local records unless this record is an old item that was deleted on another workstation (localTime <= lastSyncTime)
+          const isStaleDeletedItem = lastSyncTime > 0 && localTime > 0 && localTime <= lastSyncTime;
+          if (!isStaleDeletedItem) {
+            result.push(localItem);
+            if (!localItem.deleted && localItem.status !== "Deleted") {
+              stats.localAdded++;
+            }
           }
         } else {
-          const localTime = new Date(localItem.updatedAt || 0).getTime();
           const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
 
           const isLocalDeleted = !!localItem.deleted || localItem.status === "Deleted";
