@@ -1465,10 +1465,6 @@ export class StudentStore {
           syncStatus: "synced",
           lastSyncedAt: new Date().toISOString(),
           flashingGreen: true,
-          ...(isSilent ? {} : {
-            toastMessage: "Google Drive connected: Caseload uploaded.",
-            toastType: "sync"
-          }),
           hasUndoBackup: false
         });
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
@@ -1565,10 +1561,6 @@ export class StudentStore {
         conflicts: [],
         mergedData: null,
         flashingGreen: true,
-        ...(isSilent ? {} : {
-          toastMessage: syncMessage,
-          toastType: "sync"
-        }),
         hasUndoBackup: stats.localAdded > 0 || stats.cloudAdded > 0 || stats.conflicted > 0
       });
 

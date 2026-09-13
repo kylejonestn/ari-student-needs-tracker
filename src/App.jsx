@@ -59,7 +59,7 @@ export default function App() {
   const toastTimeoutRef = useRef(null);
   const isToastHoveredRef = useRef(false);
 
-  // Auto-dismiss toast notification after 4 seconds of page activity (mouse movement or scrolling)
+  // Auto-dismiss all toast notifications after 3 seconds (pausing while hovered)
   useEffect(() => {
     if (!toastMessage) {
       if (toastTimeoutRef.current) {
@@ -78,38 +78,17 @@ export default function App() {
       });
     };
 
-    const startDismissTimer = () => {
-      if (isToastHoveredRef.current) return;
-      if (!toastTimeoutRef.current) {
-        toastTimeoutRef.current = setTimeout(() => {
-          clearToast();
-        }, 4000);
-      }
-    };
-
-    const handleUserActivity = () => {
-      startDismissTimer();
-    };
-
-    window.addEventListener("mousemove", handleUserActivity, { passive: true });
-    window.addEventListener("scroll", handleUserActivity, { passive: true });
-    window.addEventListener("wheel", handleUserActivity, { passive: true });
-    window.addEventListener("touchmove", handleUserActivity, { passive: true });
-    window.addEventListener("keydown", handleUserActivity, { passive: true });
-
-    // Start 4s timer upon appearance
-    startDismissTimer();
+    if (!isToastHoveredRef.current) {
+      toastTimeoutRef.current = setTimeout(() => {
+        clearToast();
+      }, 3000);
+    }
 
     return () => {
       if (toastTimeoutRef.current) {
         clearTimeout(toastTimeoutRef.current);
         toastTimeoutRef.current = null;
       }
-      window.removeEventListener("mousemove", handleUserActivity);
-      window.removeEventListener("scroll", handleUserActivity);
-      window.removeEventListener("wheel", handleUserActivity);
-      window.removeEventListener("touchmove", handleUserActivity);
-      window.removeEventListener("keydown", handleUserActivity);
     };
   }, [toastMessage]);
 
@@ -358,7 +337,7 @@ export default function App() {
                   toastQuarter: null,
                   hasUndoBackup: false
                 });
-              }, 4000);
+              }, 3000);
             }
           }}
           style={{
