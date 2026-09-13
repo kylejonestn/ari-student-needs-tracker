@@ -31,7 +31,8 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   ]);
 
   const [showAugustSetup, setShowAugustSetup] = useState(false);
-  const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "thisWeek", "overdue"
+  const [selectedWeek, setSelectedWeek] = useState("thisWeek"); // "thisWeek" | "nextWeek"
+  const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "activeWeek", "overdue"
 
   const handleTimelineClick = (t) => {
     if (t.category === "Screening") {
@@ -149,44 +150,66 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   today.setHours(0, 0, 0, 0);
   const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday...
   
-  // Start of week (Monday 00:00:00)
-  const startOfWeek = new Date(today);
+  // Start of current week (Monday 00:00:00)
+  const startOfThisWeek = new Date(today);
   const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-  startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
+  startOfThisWeek.setDate(startOfThisWeek.getDate() + distToMonday);
   
-  // End of week (Sunday 23:59:59)
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(endOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
+  // End of current week (Sunday 23:59:59)
+  const endOfThisWeek = new Date(startOfThisWeek);
+  endOfThisWeek.setDate(endOfThisWeek.getDate() + 6);
+  endOfThisWeek.setHours(23, 59, 59, 999);
 
-  // Items due within the current school week (excluding overdue items)
-  const dueThisWeekItems = rawTimelines.filter(t => {
+  // Start of next week (Next Monday 00:00:00)
+  const startOfNextWeek = new Date(startOfThisWeek);
+  startOfNextWeek.setDate(startOfNextWeek.getDate() + 7);
+
+  // End of next week (Next Sunday 23:59:59)
+  const endOfNextWeek = new Date(startOfNextWeek);
+  endOfNextWeek.setDate(endOfNextWeek.getDate() + 6);
+  endOfNextWeek.setHours(23, 59, 59, 999);
+
+  // Active viewing window based on selectedWeek
+  const activeStartOfWeek = selectedWeek === "nextWeek" ? startOfNextWeek : startOfThisWeek;
+  const activeEndOfWeek = selectedWeek === "nextWeek" ? endOfNextWeek : endOfThisWeek;
+
+  // Formatted date range string (e.g. Sep 14 – Sep 20)
+  const formatDateRange = (start, end) => {
+    const startStr = start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const endStr = end.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${startStr} – ${endStr}`;
+  };
+
+  const activeDateRangeStr = formatDateRange(activeStartOfWeek, activeEndOfWeek);
+
+  // Items due within the currently selected week (excluding overdue items)
+  const dueActiveWeekItems = rawTimelines.filter(t => {
     if (t.daysRemaining !== null && t.daysRemaining < 0) return false;
     
     if (t.dueDate) {
       const dueDateObj = new Date(t.dueDate + "T12:00:00");
-      return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
+      return dueDateObj >= activeStartOfWeek && dueDateObj <= activeEndOfWeek;
     }
     
-    // Active non-dated tasks requiring completion this week (e.g. Friday signatures)
-    if (t.type === "IEP Friday Signatures" || t.type === "Pending Discontinuation") {
+    // Active non-dated tasks requiring completion during current week
+    if (selectedWeek === "thisWeek" && (t.type === "IEP Friday Signatures" || t.type === "Pending Discontinuation")) {
       return true;
     }
     return false;
   });
 
-  const dueThisWeekCount = dueThisWeekItems.length;
+  const dueActiveWeekCount = dueActiveWeekItems.length;
 
   // Overdue items
   const overdueItems = rawTimelines.filter(t => t.daysRemaining !== null && t.daysRemaining < 0);
   const overdueCount = overdueItems.length;
 
-  // Combined default view (all overdue items + all items due this week)
-  const defaultWeeklyTimelines = [...overdueItems, ...dueThisWeekItems];
+  // Combined default view (all overdue items + items due in the active selected week)
+  const defaultWeeklyTimelines = [...overdueItems, ...dueActiveWeekItems];
 
   const displayedTimelines = (
-    timelineFilter === "thisWeek"
-      ? dueThisWeekItems
+    timelineFilter === "activeWeek" || timelineFilter === "thisWeek"
+      ? dueActiveWeekItems
       : timelineFilter === "overdue"
       ? overdueItems
       : defaultWeeklyTimelines
@@ -275,6 +298,76 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
   return (
     <div>
+      {/* Week Selector / Planning Window Header */}
+      <div 
+        className="glass-panel hide-print" 
+        style={{ 
+          display: "flex", 
+          justifyContent: "space-between", 
+          alignItems: "center", 
+          marginBottom: "20px", 
+          padding: "12px 18px",
+          flexWrap: "wrap", 
+          gap: "12px",
+          border: selectedWeek === "nextWeek" ? "1px solid var(--accent-purple)" : "1px solid var(--border-color)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "12px", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px", color: "var(--text-muted)" }}>
+            Planning Window:
+          </span>
+          <span 
+            className={`timeline-badge ${selectedWeek === "nextWeek" ? "purple" : "warning"}`} 
+            style={{ fontWeight: "700", fontSize: "12px", padding: "4px 10px" }}
+          >
+            📅 {selectedWeek === "nextWeek" ? "Next Week" : "This Week"} ({activeDateRangeStr})
+          </span>
+        </div>
+
+        <div style={{ display: "inline-flex", background: "var(--bg-primary)", padding: "3px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedWeek("thisWeek");
+              setTimelineFilter("all");
+            }}
+            style={{
+              padding: "6px 14px",
+              fontSize: "12px",
+              fontWeight: "700",
+              borderRadius: "8px",
+              border: "none",
+              cursor: "pointer",
+              transition: "all var(--transition-fast)",
+              backgroundColor: selectedWeek === "thisWeek" ? "var(--accent-purple)" : "transparent",
+              color: selectedWeek === "thisWeek" ? "#ffffff" : "var(--text-muted)"
+            }}
+          >
+            This Week
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedWeek("nextWeek");
+              setTimelineFilter("all");
+            }}
+            style={{
+              padding: "6px 14px",
+              fontSize: "12px",
+              fontWeight: "700",
+              borderRadius: "8px",
+              border: "none",
+              cursor: "pointer",
+              transition: "all var(--transition-fast)",
+              backgroundColor: selectedWeek === "nextWeek" ? "var(--accent-purple)" : "transparent",
+              color: selectedWeek === "nextWeek" ? "#ffffff" : "var(--text-muted)"
+            }}
+          >
+            Next Week →
+          </button>
+        </div>
+      </div>
+
       {/* Quick Stats Banner */}
       <div className="stats-grid">
         <div 
@@ -314,20 +407,20 @@ export default function Dashboard({ students, screenings, updateScreening }) {
 
         <div 
           className="glass-panel stat-card"
-          onClick={() => setTimelineFilter(prev => prev === "thisWeek" ? "all" : "thisWeek")}
+          onClick={() => setTimelineFilter(prev => (prev === "activeWeek" || prev === "thisWeek") ? "all" : "activeWeek")}
           style={{ 
             cursor: "pointer",
             transition: "all var(--transition-normal)",
-            border: timelineFilter === "thisWeek" ? "2px solid var(--accent-amber)" : "2px solid transparent",
-            boxShadow: timelineFilter === "thisWeek" ? "0 0 12px rgba(245, 158, 11, 0.4)" : "none"
+            border: (timelineFilter === "activeWeek" || timelineFilter === "thisWeek") ? "2px solid var(--accent-amber)" : "2px solid transparent",
+            boxShadow: (timelineFilter === "activeWeek" || timelineFilter === "thisWeek") ? "0 0 12px rgba(245, 158, 11, 0.4)" : "none"
           }}
         >
           <div className="stat-icon amber">
             <SquareCheckBig size={24} />
           </div>
           <div className="stat-details">
-            <span className="stat-value">{dueThisWeekCount}</span>
-            <span className="stat-label">Due this week</span>
+            <span className="stat-value">{dueActiveWeekCount}</span>
+            <span className="stat-label">{selectedWeek === "nextWeek" ? "Due next week" : "Due this week"}</span>
           </div>
         </div>
 
@@ -437,18 +530,18 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           <div className="timeline-header">
             <div>
               <h2>
-                {timelineFilter === "thisWeek"
-                  ? `Due This Week (${displayedTimelines.length})`
+                {(timelineFilter === "activeWeek" || timelineFilter === "thisWeek")
+                  ? `Due ${selectedWeek === "nextWeek" ? "Next" : "This"} Week (${displayedTimelines.length})`
                   : timelineFilter === "overdue"
                   ? `Overdue Timelines (${displayedTimelines.length})`
-                  : "Weekly Timeline & Due Summaries"}
+                  : `${selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Timeline & Due Summaries`}
               </h2>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
-                {timelineFilter === "thisWeek"
-                  ? "Showing all action items due in the current school week"
+                {(timelineFilter === "activeWeek" || timelineFilter === "thisWeek")
+                  ? `Showing all action items due in ${selectedWeek === "nextWeek" ? "next" : "the current"} school week (${activeDateRangeStr})`
                   : timelineFilter === "overdue"
                   ? "Showing all overdue deadlines requiring immediate attention"
-                  : "Tennessee Special Education mandate countdowns (Current Week & Overdue)"}
+                  : `Tennessee Special Education mandate countdowns (${selectedWeek === "nextWeek" ? "Next Week" : "Current Week"} & Overdue)`}
               </p>
             </div>
             {timelineFilter && timelineFilter !== "all" ? (
@@ -457,10 +550,12 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                 style={{ padding: "4px 8px", fontSize: "11px", height: "fit-content", alignSelf: "flex-start" }}
                 onClick={() => setTimelineFilter("all")}
               >
-                Clear Filter (Show All Weekly)
+                Clear Filter (Show All {selectedWeek === "nextWeek" ? "Next Week" : "Weekly"})
               </button>
             ) : (
-              <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>RCS Schedule</span>
+              <span className="timeline-badge warning hide-print" style={{ fontWeight: "700", marginTop: "4px" }}>
+                {selectedWeek === "nextWeek" ? "Next Week Schedule" : "RCS Schedule"}
+              </span>
             )}
           </div>
 
@@ -476,10 +571,10 @@ export default function Dashboard({ students, screenings, updateScreening }) {
             <button 
               className="btn btn-primary" 
               style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-              onClick={() => store.sendWeeklyEmail()}
+              onClick={() => store.sendWeeklyEmail(selectedWeek === "nextWeek" ? 1 : 0)}
             >
               <Send size={12} />
-              Email Weekly Summary
+              Email {selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Summary
             </button>
             <button 
               className="btn btn-secondary" 
@@ -487,7 +582,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
               onClick={() => window.print()}
             >
               <Printer size={12} />
-              Print Weekly Checklist
+              Print {selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Checklist
             </button>
           </div>
 

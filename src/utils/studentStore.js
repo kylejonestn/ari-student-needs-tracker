@@ -1972,7 +1972,7 @@ export class StudentStore {
   }
 
   // Send HTML weekly email summary via the Google Gmail API
-  async sendWeeklyEmail() {
+  async sendWeeklyEmail(weekOffset = 0) {
     if (!this.isTokenValid()) {
       alert("Please connect your Google Account first using settings.");
       return;
@@ -1981,26 +1981,26 @@ export class StudentStore {
     this.updateState({ syncStatus: "saving" });
 
     try {
-      // 1. Calculate matching timelines in the current week (identical to Dashboard layout)
+      // 1. Calculate matching timelines in the target week (identical to Dashboard layout)
       const activeTimelines = this.state.students.flatMap(s => calculateTimelines(s, false).map(t => ({ ...t, studentName: s.name, type: "Active" })));
       const screeningTimelines = this.state.screenings.flatMap(s => calculateTimelines(s, true).map(t => ({ ...t, studentName: s.name, type: "Screening" })));
       const rawTimelines = [...activeTimelines, ...screeningTimelines];
       
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const currentDay = today.getDay();
+      
+      const startOfWeek = new Date(today);
+      const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+      startOfWeek.setDate(startOfWeek.getDate() + distToMonday + (weekOffset * 7));
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
       const dueThisWeek = rawTimelines.filter(t => {
-        if (t.daysRemaining < 0) return true;
+        if (t.daysRemaining < 0) return weekOffset === 0; // only include overdue in current week summary
         if (!t.dueDate) return false;
-        
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const currentDay = today.getDay();
-        
-        const startOfWeek = new Date(today);
-        const distToMonday = currentDay === 0 ? -6 : 1 - currentDay;
-        startOfWeek.setDate(startOfWeek.getDate() + distToMonday);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(endOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
         
         const dueDateObj = new Date(t.dueDate);
         dueDateObj.setHours(0, 0, 0, 0);
@@ -2008,15 +2008,17 @@ export class StudentStore {
         return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;
       });
 
+      const weekLabel = weekOffset === 1 ? "Next Week" : "Current Week";
+
       // 2. Build email body HTML summary
       let htmlBody = `
         <div style="font-family: sans-serif; color: #334155; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; background-color: #ffffff;">
           <div style="text-align: center; border-bottom: 2px solid #6366f1; padding-bottom: 16px; margin-bottom: 20px;">
-            <h1 style="color: #0f172a; margin: 0; font-size: 22px;">Aegis Weekly Due Summary</h1>
+            <h1 style="color: #0f172a; margin: 0; font-size: 22px;">Aegis ${weekLabel} Due Summary</h1>
             <p style="color: #64748b; margin: 4px 0 0; font-size: 13px;">Blackman Middle School Gifted Facilitation Mandates</p>
           </div>
           
-          <p style="font-size: 14px; color: #475569; margin-bottom: 20px;">Hi Ariel, here is your consolidated summary of special education timelines and signatures due for the current calendar week:</p>
+          <p style="font-size: 14px; color: #475569; margin-bottom: 20px;">Hi Ariel, here is your consolidated summary of special education timelines and signatures due for ${weekOffset === 1 ? "the upcoming calendar week" : "the current calendar week"}:</p>
       `;
 
       if (dueThisWeek.length === 0) {
