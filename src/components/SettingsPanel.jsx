@@ -199,7 +199,10 @@ export default function SettingsPanel({
   syncFromGoogleDrive,
   accessToken,
   tokenExpiry,
-  holidays
+  holidays,
+  workEmail,
+  saveToBrowser,
+  pendingLocalSync
 }) {
   const [tempClientId, setTempClientId] = useState(clientId);
   const [showSavedMsg, setShowSavedMsg] = useState(false);
@@ -207,11 +210,21 @@ export default function SettingsPanel({
   const emailAlerts = store.getState().emailAlertsEnabled;
   const calendarSync = store.getState().calendarSyncEnabled;
 
-  const storeWorkEmail = store.getState().workEmail;
+  const currentWorkEmail = workEmail !== undefined ? workEmail : store.getState().workEmail;
 
   // Email state variables
-  const [tempWorkEmail, setTempWorkEmail] = useState(storeWorkEmail);
+  const [tempWorkEmail, setTempWorkEmail] = useState(currentWorkEmail || "");
   const [showEmailSavedMsg, setShowEmailSavedMsg] = useState(false);
+
+  const handleToggleSaveToBrowser = (enabled) => {
+    if (!enabled && pendingLocalSync && syncStatus !== "synced") {
+      const confirmTurnOff = window.confirm(
+        "You currently have offline changes stored on this computer that haven't been synced to Google Drive yet. If you turn off Offline Mode before syncing, these unsaved records may be cleared.\n\nAre you sure you want to turn off Offline Mode?"
+      );
+      if (!confirmTurnOff) return;
+    }
+    store.toggleSaveToBrowser(enabled);
+  };
 
   // Keep local inputs synced with external state changes (like after a Google Drive sync)
   useEffect(() => {
@@ -219,8 +232,10 @@ export default function SettingsPanel({
   }, [clientId]);
 
   useEffect(() => {
-    setTempWorkEmail(storeWorkEmail);
-  }, [storeWorkEmail]);
+    if (currentWorkEmail !== undefined) {
+      setTempWorkEmail(currentWorkEmail || "");
+    }
+  }, [currentWorkEmail]);
 
   const storeReportCardDates = store.getState().reportCardDates || DEFAULT_REPORT_CARD_DATES;
   const [reportCardDatesState, setReportCardDatesState] = useState(storeReportCardDates);
@@ -574,6 +589,57 @@ export default function SettingsPanel({
                   </div>
                 </div>
               )}
+
+              {/* Save Data to Browser (Offline Mode) Feature Toggle */}
+              <div style={{ 
+                marginTop: "4px", 
+                paddingTop: "14px", 
+                borderTop: "1px solid var(--border-color)", 
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "10px" 
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
+                  <div>
+                    <label 
+                      htmlFor="saveToBrowserToggle" 
+                      style={{ 
+                        fontWeight: "600", 
+                        fontSize: "13px", 
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        color: "var(--text-heading)"
+                      }}
+                    >
+                      <span>Save Data to Browser (Offline Mode)</span>
+                      {saveToBrowser ? (
+                        <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)", fontWeight: "700" }}>ENABLED</span>
+                      ) : (
+                        <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(100, 116, 139, 0.15)", color: "var(--text-muted)", fontWeight: "600" }}>RECOMMENDED: OFF</span>
+                      )}
+                    </label>
+                    <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "4px 0 0 0", lineHeight: "1.45" }}>
+                      When disabled (recommended), Aegis loads and saves exclusively through your Google Drive (<code>all-data.json</code>) to keep your caseload in sync across laptops, desktop workstations, and mobile devices. Enable only if you need to access or edit records while disconnected from the internet.
+                    </p>
+                  </div>
+                  <input
+                    id="saveToBrowserToggle"
+                    type="checkbox"
+                    checked={!!saveToBrowser}
+                    onChange={(e) => handleToggleSaveToBrowser(e.target.checked)}
+                    style={{ 
+                      cursor: "pointer", 
+                      width: "18px", 
+                      height: "18px", 
+                      accentColor: "var(--accent-purple)",
+                      marginTop: "2px",
+                      flexShrink: 0
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

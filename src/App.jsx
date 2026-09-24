@@ -297,6 +297,9 @@ export default function App() {
                   accessToken={accessToken}
                   tokenExpiry={tokenExpiry}
                   holidays={storeState.holidays}
+                  workEmail={storeState.workEmail}
+                  saveToBrowser={storeState.saveToBrowser}
+                  pendingLocalSync={storeState.pendingLocalSync}
                 />
               )}
             </>

@@ -21,7 +21,11 @@ import {
   FileCheck,
   Printer,
   Sparkles,
-  ClipboardList
+  ClipboardList,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  Info
 } from "lucide-react";
 
 export default function Dashboard({ students, screenings, updateScreening }) {
@@ -84,48 +88,83 @@ export default function Dashboard({ students, screenings, updateScreening }) {
           selectedProgressStudentId: t.studentId,
           selectedProgressQuarter: quarter
         });
-      } else if (
-        t.type === "Triennial Re-evaluation" ||
-        t.type === "Re-eval Invitation" ||
-        t.type === "Re-eval Observation" ||
-        t.type === "Re-eval Psych Handoff"
-      ) {
-        store.updateState({
-          activeTab: "reeval",
-          selectedReevalStudentId: t.studentId
-        });
       } else {
+        const student = students.find(s => s.id === t.studentId);
+        const isReeval = !!student?.isReeval;
         let stepIndex = 0;
-        switch (t.type) {
-          case "August Setup":
-          case "August Calendar":
-            stepIndex = 0;
-            break;
-          case "IEP Due Date":
-            stepIndex = 1;
-            break;
-          case "IEP Invitation":
-          case "IEP Invitation Follow-Up":
-            stepIndex = 2;
-            break;
-          case "IEP Transition Survey":
-            stepIndex = 3;
-            break;
-          case "IEP Data Mining":
-            stepIndex = 4;
-            break;
-          case "IEP Writing":
-          case "IEP Send Draft":
-            stepIndex = 5;
-            break;
-          case "IEP Finalization":
-          case "IEP Print Glance":
-          case "IEP Friday Signatures":
-            stepIndex = 6;
-            break;
-          default:
-            stepIndex = 0;
+
+        if (isReeval) {
+          switch (t.type) {
+            case "August Setup":
+            case "August Calendar":
+              stepIndex = 0;
+              break;
+            case "IEP Due Date":
+            case "Triennial Re-evaluation":
+            case "Re-eval Schedule":
+              stepIndex = 1;
+              break;
+            case "IEP Invitation":
+            case "IEP Invitation Follow-Up":
+            case "Re-eval Invitation":
+              stepIndex = 2;
+              break;
+            case "Re-eval Surveys Check":
+              stepIndex = 4;
+              break;
+            case "Re-eval Observation":
+              stepIndex = 5;
+              break;
+            case "Re-eval Psych Handoff":
+              stepIndex = 6;
+              break;
+            case "IEP Data Mining":
+            case "IEP Transition Survey":
+              stepIndex = 7;
+              break;
+            case "IEP Writing":
+            case "IEP Send Draft":
+              stepIndex = 8;
+              break;
+            case "IEP Finalization":
+            case "IEP Print Glance":
+            case "IEP Friday Signatures":
+              stepIndex = 9;
+              break;
+            default:
+              stepIndex = 0;
+          }
+        } else {
+          switch (t.type) {
+            case "August Setup":
+            case "August Calendar":
+              stepIndex = 0;
+              break;
+            case "IEP Due Date":
+              stepIndex = 1;
+              break;
+            case "IEP Invitation":
+            case "IEP Invitation Follow-Up":
+              stepIndex = 2;
+              break;
+            case "IEP Data Mining":
+            case "IEP Transition Survey":
+              stepIndex = 4;
+              break;
+            case "IEP Writing":
+            case "IEP Send Draft":
+              stepIndex = 5;
+              break;
+            case "IEP Finalization":
+            case "IEP Print Glance":
+            case "IEP Friday Signatures":
+              stepIndex = 6;
+              break;
+            default:
+              stepIndex = 0;
+          }
         }
+
         store.updateState({
           activeTab: "iep",
           selectedIepStudentId: t.studentId,
@@ -296,8 +335,128 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     alert(`IEP at a Glance signatures & administrative uploads checked off for ${student.name}!`);
   };
 
+  const storeState = store.getState();
+  const isConnected = store.isTokenValid();
+  const showDisconnectedBanner = !isConnected;
+  const offlineEditsCount = storeState.offlineEditsCount || 0;
+  const showOfflineEditsAlert = !isConnected && offlineEditsCount > 2 && !storeState.dismissedOfflineAlert;
+
   return (
     <div>
+      {/* 1. Google Drive Disconnected Prompt Banner */}
+      {showDisconnectedBanner && (
+        <div 
+          className="glass-panel hide-print"
+          style={{
+            marginBottom: "16px",
+            padding: "12px 18px",
+            backgroundColor: "rgba(99, 102, 241, 0.08)",
+            border: "1px solid rgba(99, 102, 241, 0.3)",
+            borderRadius: "10px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ 
+              width: "32px", 
+              height: "32px", 
+              borderRadius: "8px", 
+              backgroundColor: "rgba(99, 102, 241, 0.15)", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <CloudOff size={18} color="var(--accent-purple)" />
+            </div>
+            <div>
+              <div style={{ fontWeight: "700", fontSize: "13px", color: "var(--text-heading)" }}>
+                Google Drive Disconnected
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                Sign in with Google to load and sync your active student caseload & deadlines.
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => store.connectGoogleDrive()}
+            style={{ fontSize: "12px", padding: "6px 14px", display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            <Cloud size={14} />
+            Sign in with Google (SSO)
+          </button>
+        </div>
+      )}
+
+      {/* 2. Offline Edits Threshold Warning Banner (> 2 records changed offline) */}
+      {showOfflineEditsAlert && (
+        <div 
+          className="glass-panel hide-print"
+          style={{
+            marginBottom: "16px",
+            padding: "12px 18px",
+            backgroundColor: "rgba(245, 158, 11, 0.08)",
+            border: "1px solid rgba(245, 158, 11, 0.35)",
+            borderRadius: "10px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ 
+              width: "32px", 
+              height: "32px", 
+              borderRadius: "8px", 
+              backgroundColor: "rgba(245, 158, 11, 0.18)", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <AlertTriangle size={18} color="var(--accent-amber)" />
+            </div>
+            <div>
+              <div style={{ fontWeight: "700", fontSize: "13px", color: "var(--text-heading)" }}>
+                Un-synced Offline Changes ({offlineEditsCount})
+              </div>
+              <div style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                You have {offlineEditsCount} offline changes saved to this browser. Reconnect to Google Drive to sync these changes to your other computers.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => store.dismissOfflineAlert()}
+              style={{ fontSize: "12px", padding: "6px 12px" }}
+            >
+              Save locally, I'll sync later
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => store.connectGoogleDrive()}
+              style={{ fontSize: "12px", padding: "6px 14px", display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <RefreshCw size={14} />
+              Connect & Sync Now
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Week Selector / Planning Window Header */}
       <div 
         className="glass-panel hide-print" 

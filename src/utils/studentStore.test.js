@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines } from "./studentStore.js";
+import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines, getDaysRemaining, getTodayISO, formatDateToISO, addDays, addSchoolDays } from "./studentStore.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -569,4 +569,184 @@ describe("Google Drive Multi-Workstation Sync Enhancements", () => {
     assert.equal(stats.localAdded, 1, "Should count 1 local addition (Device B)");
   });
 });
+
+describe("Re-eval Timeline Calculations & Milestones", () => {
+  it("should generate Academic Data Mining and IEP writing milestones for Re-eval students with reevalMeetingDate", () => {
+    const student = {
+      id: "shepherd-1",
+      name: "Shepherd Woosley",
+      status: "Active",
+      isReeval: true,
+      iepDueDate: "2026-10-01",
+      reevalDueDate: "2026-10-01",
+      reevalMeetingDate: "2026-09-29",
+      iepMeetingDate: "2026-09-29",
+      iepDataMiningCompleted: false,
+      augustSetupComplete: true
+    };
+
+    const timelines = calculateTimelines(student, false);
+    const dataMining = timelines.find(t => t.type === "IEP Data Mining");
+    assert.ok(dataMining, "Academic Data Mining timeline should be generated for re-eval student");
+    assert.equal(dataMining.label, "Academic Data Mining");
+    assert.ok(dataMining.dueDate, "Data mining should have a due date");
+    
+    const triennial = timelines.find(t => t.type === "Triennial Re-evaluation");
+    assert.ok(triennial, "Triennial Re-evaluation timeline should be generated");
+  });
+});
+
+describe("Save Data to Browser (Offline Mode) & Sync Safeguards", () => {
+  it("should default saveToBrowser to false", () => {
+    const store = new StudentStore();
+    assert.equal(store.state.saveToBrowser, false, "saveToBrowser should default to false");
+  });
+
+  it("should allow toggling saveToBrowser", () => {
+    const store = new StudentStore();
+    assert.equal(store.state.saveToBrowser, false);
+    store.toggleSaveToBrowser(true);
+    assert.equal(store.state.saveToBrowser, true);
+    store.toggleSaveToBrowser(false);
+    assert.equal(store.state.saveToBrowser, false);
+  });
+
+  it("should track offlineEditsCount when changes are saved while disconnected", () => {
+    const store = new StudentStore();
+    assert.equal(store.isTokenValid(), false);
+    assert.equal(store.state.offlineEditsCount, 0);
+
+    store.triggerCloudSave();
+    assert.equal(store.state.offlineEditsCount, 1);
+
+    store.triggerCloudSave();
+    assert.equal(store.state.offlineEditsCount, 2);
+
+    store.triggerCloudSave();
+    assert.equal(store.state.offlineEditsCount, 3);
+  });
+
+  it("should allow dismissing the offline alert banner", () => {
+    const store = new StudentStore();
+    assert.equal(store.state.dismissedOfflineAlert, false);
+    store.dismissOfflineAlert();
+    assert.equal(store.state.dismissedOfflineAlert, true);
+  });
+
+  it("should preserve pendingLocalSync and initialize students when local cache exists", () => {
+    // Simulate pre-existing localStorage cache on a device
+    const mockStorage = {
+      aegis_students: JSON.stringify([{ id: "stu-local-device", name: "Offline Student", status: "Active" }]),
+      aegis_save_to_browser: "false"
+    };
+
+    const origLocalStorage = global.localStorage;
+    global.localStorage = {
+      getItem: (key) => mockStorage[key] || null,
+      setItem: (key, val) => { mockStorage[key] = val; },
+      removeItem: (key) => { delete mockStorage[key]; }
+    };
+
+    try {
+      const store = new StudentStore();
+      assert.equal(store.state.pendingLocalSync, true, "Should flag pendingLocalSync when local cache is detected");
+      assert.equal(store.state.students.length, 1);
+      assert.equal(store.state.students[0].name, "Offline Student");
+    } finally {
+      global.localStorage = origLocalStorage;
+    }
+  });
+
+  it("should initialize students as empty array when disconnected with saveToBrowser false and no local cache", () => {
+    const mockStorage = {
+      aegis_save_to_browser: "false"
+    };
+
+    const origLocalStorage = global.localStorage;
+    global.localStorage = {
+      getItem: (key) => mockStorage[key] || null,
+      setItem: (key, val) => { mockStorage[key] = val; },
+      removeItem: (key) => { delete mockStorage[key]; }
+    };
+
+    try {
+      const store = new StudentStore();
+      assert.equal(store.state.pendingLocalSync, false);
+      assert.equal(store.state.saveToBrowser, false);
+      assert.deepEqual(store.state.students, [], "Should be empty to prompt Google Drive connection");
+      assert.deepEqual(store.state.screenings, [], "Should be empty to prompt Google Drive connection");
+    } finally {
+      global.localStorage = origLocalStorage;
+    }
+  });
+});
+
+describe("Settings and Configuration Merging", () => {
+  const store = new StudentStore();
+
+  it("should preserve updated local workEmail and settings over stale cloud data during merge", () => {
+    const localData = {
+      workEmail: "kylejones007@gmail.com",
+      emailAlertsEnabled: false,
+      calendarSyncEnabled: true,
+      reportCardDates: { "Q1": "2026-10-15" },
+      deadlines: { initialTestingDays: 45 },
+      students: [],
+      screenings: []
+    };
+
+    const cloudData = {
+      workEmail: "jonesar@rcschools.net",
+      emailAlertsEnabled: true,
+      calendarSyncEnabled: false,
+      reportCardDates: { "Q1": "2026-10-01" },
+      deadlines: { initialTestingDays: 30 },
+      students: [],
+      screenings: []
+    };
+
+    const { merged } = store.mergeWithCloud(localData, cloudData);
+
+    assert.equal(merged.workEmail, "kylejones007@gmail.com", "Local work email must take precedence over stale cloud email");
+    assert.equal(merged.emailAlertsEnabled, false, "Local emailAlertsEnabled must take precedence");
+    assert.equal(merged.calendarSyncEnabled, true, "Local calendarSyncEnabled must take precedence");
+    assert.equal(merged.reportCardDates["Q1"], "2026-10-15", "Local report card dates must take precedence");
+    assert.equal(merged.deadlines.initialTestingDays, 45, "Local deadlines must take precedence");
+  });
+});
+
+describe("Date and Timezone Handling", () => {
+  it("should accurately calculate days remaining for today, tomorrow, and yesterday without UTC drift", () => {
+    const todayStr = getTodayISO();
+    assert.equal(getDaysRemaining(todayStr), 0, "Today's date should have exactly 0 days remaining (Due Today)");
+
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const tomorrowStr = formatDateToISO(tomorrow);
+    assert.equal(getDaysRemaining(tomorrowStr), 1, "Tomorrow's date should have exactly 1 day remaining");
+
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayStr = formatDateToISO(yesterday);
+    assert.equal(getDaysRemaining(yesterdayStr), -1, "Yesterday's date should have -1 day remaining");
+  });
+
+  it("should format dates to ISO YYYY-MM-DD using local calendar date", () => {
+    const d = new Date(2026, 8, 24); // Sep 24, 2026
+    assert.equal(formatDateToISO(d), "2026-09-24");
+  });
+
+  it("should add days and school days without timezone offset shift", () => {
+    const nextDay = addDays("2026-09-23", 1);
+    assert.equal(nextDay, "2026-09-24");
+
+    const futureDay = addDays("2026-09-23", 7);
+    assert.equal(futureDay, "2026-09-30");
+
+    // Wednesday to Thursday = 1 school day
+    assert.equal(addSchoolDays("2026-09-23", 1), "2026-09-24");
+    // Friday to Monday = 1 school day
+    assert.equal(addSchoolDays("2026-09-25", 1), "2026-09-28");
+  });
+});
+
 

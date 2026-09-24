@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState, useEffect } from "react";
-import { store, addDays, getDaysRemaining, addSchoolDays, guessTeacherEmail, DEFAULT_DEADLINES } from "../utils/studentStore";
+import { store, addDays, getDaysRemaining, addSchoolDays, guessTeacherEmail, DEFAULT_DEADLINES, getTodayISO } from "../utils/studentStore";
 import { 
   Check, 
   ClipboardList, 
@@ -1419,7 +1419,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
             const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
             
             const getStageDueDate = (idx, raw = false) => {
-              const refDate = student.referralDate || new Date().toISOString().split("T")[0];
+              const refDate = student.referralDate || getTodayISO();
               let val = "";
               switch (idx) {
                 case 0:

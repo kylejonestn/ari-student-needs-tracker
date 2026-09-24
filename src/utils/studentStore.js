@@ -101,6 +101,20 @@ export const DEFAULT_DEADLINES = {
   iepDraftSent: 2,               // School Days
 };
 
+// Helper to format Date object into YYYY-MM-DD in local time
+export const formatDateToISO = (date) => {
+  if (!date || isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+// Helper to get today's date string (YYYY-MM-DD) in local time
+export const getTodayISO = () => {
+  return formatDateToISO(new Date());
+};
+
 // Checks if a date is a valid school day (no weekends, no holidays, no designated breaks)
 export const isSchoolDay = (dateStr) => {
   if (!dateStr) return false;
@@ -108,7 +122,7 @@ export const isSchoolDay = (dateStr) => {
   const day = date.getDay();
   if (day === 0 || day === 6) return false; // Weekend
   
-  const yyyymmdd = date.toISOString().split("T")[0];
+  const yyyymmdd = formatDateToISO(date);
   
   // Dynamic holiday check
   let holidays = DEFAULT_HOLIDAYS;
@@ -128,24 +142,32 @@ export const addSchoolDays = (dateStr, days) => {
   const step = days >= 0 ? 1 : -1;
   while (daysCount < absDays) {
     date.setDate(date.getDate() + step);
-    const yyyymmdd = date.toISOString().split("T")[0];
+    const yyyymmdd = formatDateToISO(date);
     if (isSchoolDay(yyyymmdd)) {
       daysCount++;
     }
   }
-  return date.toISOString().split("T")[0];
+  return formatDateToISO(date);
 };
 
-// Helper to calculate date difference in calendar days
+// Helper to calculate date difference in calendar days without UTC offset shifting
 export const getDaysRemaining = (targetDateStr) => {
-  if (!targetDateStr) return null;
+  if (!targetDateStr || targetDateStr === "TBD") return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(targetDateStr);
-  target.setHours(0, 0, 0, 0);
+
+  // Parse YYYY-MM-DD in local timezone to avoid UTC midnight drift to previous day
+  const parts = targetDateStr.split("-");
+  let target;
+  if (parts.length === 3) {
+    target = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 0, 0, 0, 0);
+  } else {
+    target = new Date(targetDateStr);
+    target.setHours(0, 0, 0, 0);
+  }
   
   const diffTime = target.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
 };
 
@@ -156,11 +178,11 @@ export const adjustToSchoolDay = (dateStr, direction = -1) => {
   if (!dateStr || dateStr === "TBD") return dateStr;
   let date = new Date(dateStr + "T12:00:00");
   let count = 0;
-  while (!isSchoolDay(date.toISOString().split("T")[0]) && count < 30) {
+  while (!isSchoolDay(formatDateToISO(date)) && count < 30) {
     date.setDate(date.getDate() + direction);
     count++;
   }
-  return date.toISOString().split("T")[0];
+  return formatDateToISO(date);
 };
 
 // Add days to a date string and return YYYY-MM-DD (adjusted to school days)
@@ -168,7 +190,7 @@ export const addDays = (dateStr, days) => {
   if (!dateStr) return "";
   const date = new Date(dateStr + "T12:00:00");
   date.setDate(date.getDate() + days);
-  const calculatedDate = date.toISOString().split("T")[0];
+  const calculatedDate = formatDateToISO(date);
   const direction = days < 0 ? -1 : 1;
   return adjustToSchoolDay(calculatedDate, direction);
 };
@@ -213,7 +235,7 @@ export const calculateTimelines = (student, isScreening = false) => {
     
     // Status 1: Quick Survey (Cume File Check)
     if (student.status === "Quick Survey") {
-      const dueDate = addSchoolDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningQuickSurvey);
+      const dueDate = addSchoolDays(student.referralDate || getTodayISO(), deadlines.screeningQuickSurvey);
       const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Quick Survey",
@@ -229,7 +251,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 2: Consent Pending
     if (student.status === "Consent Pending") {
-      const dueDate = addDays(student.referralDate || new Date().toISOString().split("T")[0], deadlines.screeningConsentPending);
+      const dueDate = addDays(student.referralDate || getTodayISO(), deadlines.screeningConsentPending);
       const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Consent Pending",
@@ -306,7 +328,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 4: Informed Consent (Phone Call)
     if (student.status === "Informed Consent" && !student.informedConsentCompleted) {
-      const dueDate = addDays(new Date().toISOString().split("T")[0], deadlines.screeningInformedConsent);
+      const dueDate = addDays(getTodayISO(), deadlines.screeningInformedConsent);
       timelines.push({
         type: "Informed Consent",
         label: "Informed Consent Call/Email",
@@ -320,7 +342,7 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Status 5: Permission to Test Pending
     if (student.status === "Permission to Test Pending" && !student.permissionToTestReceivedDate) {
-      const dueDate = addDays(new Date().toISOString().split("T")[0], deadlines.screeningPermissionToTest);
+      const dueDate = addDays(getTodayISO(), deadlines.screeningPermissionToTest);
       const days = getDaysRemaining(dueDate);
       timelines.push({
         type: "Permission to Test",
@@ -447,153 +469,154 @@ export const calculateTimelines = (student, isScreening = false) => {
         status: daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track",
         mandatory: true
       });
+    }
 
-      // Individual IEP writing timeline milestones (triggered if an IEP meeting date is set)
-      if (student.iepMeetingDate && !student.iepFinalizedDate) {
-        const mDate = student.iepMeetingDate;
+    // Individual meeting & document workflow milestones (runs for both IEP & Re-eval when a meeting date is scheduled)
+    const effectiveMeetingDate = student.isReeval ? (student.reevalMeetingDate || student.iepMeetingDate) : student.iepMeetingDate;
+    if (effectiveMeetingDate && !student.iepFinalizedDate) {
+      const mDate = effectiveMeetingDate;
 
-        // 1. Send Invitation (10 days legal notice, 20 days Ariel)
-        if (!student.iepInvitationSentDate) {
-          const inviteDue = addDays(mDate, -deadlines.iepFormalInvitation);
-          const inviteDays = getDaysRemaining(inviteDue);
+      // 1. Send Invitation (only for regular IEP - re-eval invitation handled below in re-eval section)
+      if (!student.isReeval && !student.iepInvitationSentDate) {
+        const inviteDue = addDays(mDate, -deadlines.iepFormalInvitation);
+        const inviteDays = getDaysRemaining(inviteDue);
+        timelines.push({
+          type: "IEP Invitation",
+          label: "Send IEP Team Invitation",
+          desc: "Send formal parent meeting invitation. Legal deadline is 10 days before meeting.",
+          dueDate: inviteDue,
+          daysRemaining: inviteDays,
+          status: inviteDays <= 0 ? "overdue" : inviteDays <= 3 ? "warning" : "on-track",
+          mandatory: true
+        });
+      }
+
+      // IEP Invitation Response Follow-Up Check (sent >= 7 days ago, response not received)
+      if (!student.isReeval && student.iepInvitationSentDate && !student.iepInvitationResponseReceived) {
+        const sentDate = new Date(student.iepInvitationSentDate + "T12:00:00");
+        const today = new Date();
+        const diffTime = today.getTime() - sentDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays >= 7) {
+          const followUpDueDate = addDays(student.iepInvitationSentDate, 7);
           timelines.push({
-            type: "IEP Invitation",
-            label: "Send IEP Team Invitation",
-            desc: "Send formal parent meeting invitation. Legal deadline is 10 days before meeting.",
-            dueDate: inviteDue,
-            daysRemaining: inviteDays,
-            status: inviteDays <= 0 ? "overdue" : inviteDays <= 3 ? "warning" : "on-track",
-            mandatory: true
-          });
-        }
-
-        // IEP Invitation Response Follow-Up Check (sent >= 7 days ago, response not received)
-        if (student.iepInvitationSentDate && !student.iepInvitationResponseReceived) {
-          const sentDate = new Date(student.iepInvitationSentDate + "T12:00:00");
-          const today = new Date();
-          const diffTime = today.getTime() - sentDate.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          if (diffDays >= 7) {
-            const followUpDueDate = addDays(student.iepInvitationSentDate, 7);
-            timelines.push({
-              type: "IEP Invitation Follow-Up",
-              label: "Follow Up on IEP Invitation",
-              desc: `Invitation sent on ${student.iepInvitationSentDate} (${diffDays} days ago). Follow up with parent for response.`,
-              dueDate: followUpDueDate,
-              daysRemaining: 7 - diffDays,
-              status: "overdue",
-              mandatory: false,
-              actionNeeded: "Follow Up Invite"
-            });
-          }
-        }
-
-        // 2. Data Mining Checklist (7 days before)
-        if (!student.iepDataMiningCompleted) {
-          const mineDue = addSchoolDays(mDate, -deadlines.iepDataGathering);
-          const mineDays = getDaysRemaining(mineDue);
-          timelines.push({
-            type: "IEP Data Mining",
-            label: "Academic Data Mining",
-            desc: "Mine T-VAAS TCAP, Mastery Connect, AIMSweb fluency, and Savvas math scores.",
-            dueDate: mineDue,
-            daysRemaining: mineDays,
-            status: mineDays <= 0 ? "overdue" : mineDays <= 2 ? "warning" : "on-track",
+            type: "IEP Invitation Follow-Up",
+            label: "Follow Up on IEP Invitation",
+            desc: `Invitation sent on ${student.iepInvitationSentDate} (${diffDays} days ago). Follow up with parent for response.`,
+            dueDate: followUpDueDate,
+            daysRemaining: 7 - diffDays,
+            status: "overdue",
             mandatory: false,
-            actionNeeded: "Mine Data"
-          });
-        }
-
-        // 3. Transition Survey (6 days before)
-        if (!student.iepTransitionSurveyCompleted) {
-          const transDue = addSchoolDays(mDate, -deadlines.iepTransitionSurvey);
-          timelines.push({
-            type: "IEP Transition Survey",
-            label: "Student Transition Survey",
-            desc: "Complete student transition goals survey (grade-level specific).",
-            dueDate: transDue,
-            daysRemaining: getDaysRemaining(transDue),
-            status: getDaysRemaining(transDue) <= 0 ? "overdue" : "on-track",
-            mandatory: false
-          });
-        }
-
-        // 4. Write IEP (4 days before)
-        if (!student.iepDraftWrittenDate) {
-          const draftDue = addSchoolDays(mDate, -deadlines.iepDraftWritten);
-          timelines.push({
-            type: "IEP Writing",
-            label: "Write IEP Document Draft",
-            desc: "Complete comprehensive IEP draft on TN Pulse (approx. 2 hours task time).",
-            dueDate: draftDue,
-            daysRemaining: getDaysRemaining(draftDue),
-            status: getDaysRemaining(draftDue) <= 0 ? "overdue" : getDaysRemaining(draftDue) <= 2 ? "warning" : "on-track",
-            mandatory: false
-          });
-        }
-
-        // 5. Send IEP Draft to Parent (48 business/school hours before)
-        if (!student.iepDraftSentDate) {
-          const sendDue = addSchoolDays(mDate, -deadlines.iepDraftSent); // 2 school days before
-          const sendDays = getDaysRemaining(sendDue);
-          timelines.push({
-            type: "IEP Send Draft",
-            label: "Send IEP Draft to Parents",
-            desc: "Deliver completed draft IEP & Zoom link to parent (48 school hours rule).",
-            dueDate: sendDue,
-            daysRemaining: sendDays,
-            status: sendDays <= 0 ? "overdue" : sendDays <= 1 ? "warning" : "on-track",
-            mandatory: false
+            actionNeeded: "Follow Up Invite"
           });
         }
       }
 
-      // IEP Post-Meeting Tasks
-      if (student.iepMeetingDate && getDaysRemaining(student.iepMeetingDate) <= 0 && !student.iepPhysicalFileCompleted) {
-        // Finalize IEP (5 days legal / 1 day Ariel)
-        if (!student.iepFinalizedDate) {
-          const finDue = addDays(student.iepMeetingDate, 1);
-          const finDays = getDaysRemaining(finDue);
-          timelines.push({
-            type: "IEP Finalization",
-            label: "Finalize Pulse IEP",
-            desc: "Submit and lock finalized IEP document. Legal deadline: 5 days post-meeting.",
-            dueDate: finDue,
-            daysRemaining: finDays,
-            status: finDays < 0 ? "overdue" : "warning",
-            mandatory: true
-          });
-        }
+      // 2. Data Mining Checklist (7 days before) - CRITICAL: applies to both IEP and Re-eval!
+      if (!student.iepDataMiningCompleted) {
+        const mineDue = addSchoolDays(mDate, -deadlines.iepDataGathering);
+        const mineDays = getDaysRemaining(mineDue);
+        timelines.push({
+          type: "IEP Data Mining",
+          label: "Academic Data Mining",
+          desc: "Mine T-VAAS TCAP, Mastery Connect, AIMSweb fluency, and Savvas math scores.",
+          dueDate: mineDue,
+          daysRemaining: mineDays,
+          status: mineDays <= 0 ? "overdue" : mineDays <= 2 ? "warning" : "on-track",
+          mandatory: false,
+          actionNeeded: "Mine Data"
+        });
+      }
 
-        // Print IEP at a Glance (next day)
-        if (student.iepFinalizedDate && !student.iepAtAGlancePrinted) {
-          const printDue = addDays(student.iepFinalizedDate, 1);
-          const printDays = getDaysRemaining(printDue);
-          timelines.push({
-            type: "IEP Print Glance",
-            label: "Print IEP at a Glance",
-            desc: "Generate and print 1-page teacher summary report.",
-            dueDate: printDue,
-            daysRemaining: printDays,
-            status: printDays < 0 ? "overdue" : "warning",
-            mandatory: false,
-            actionNeeded: "Print Glance"
-          });
-        }
+      // 3. Transition Survey (6 days before)
+      if (!student.iepTransitionSurveyCompleted) {
+        const transDue = addSchoolDays(mDate, -deadlines.iepTransitionSurvey);
+        timelines.push({
+          type: "IEP Transition Survey",
+          label: "Student Transition Survey",
+          desc: "Complete student transition goals survey (grade-level specific).",
+          dueDate: transDue,
+          daysRemaining: getDaysRemaining(transDue),
+          status: getDaysRemaining(transDue) <= 0 ? "overdue" : "on-track",
+          mandatory: false
+        });
+      }
 
-        // IEP at a Glance Signatures (Friday deadline)
-        if (student.iepFinalizedDate && !student.iepAtAGlanceSignaturesCompleted) {
-          timelines.push({
-            type: "IEP Friday Signatures",
-            label: "At a Glance Friday Signatures",
-            desc: "Collect signature checklist from non-attending classroom teachers.",
-            dueDate: "",
-            daysRemaining: null,
-            status: "warning",
-            mandatory: false
-          });
-        }
+      // 4. Write IEP (4 days before)
+      if (!student.iepDraftWrittenDate) {
+        const draftDue = addSchoolDays(mDate, -deadlines.iepDraftWritten);
+        timelines.push({
+          type: "IEP Writing",
+          label: student.isReeval ? "Write Re-eval / IEP Document Draft" : "Write IEP Document Draft",
+          desc: "Complete comprehensive IEP draft on TN Pulse (approx. 2 hours task time).",
+          dueDate: draftDue,
+          daysRemaining: getDaysRemaining(draftDue),
+          status: getDaysRemaining(draftDue) <= 0 ? "overdue" : getDaysRemaining(draftDue) <= 2 ? "warning" : "on-track",
+          mandatory: false
+        });
+      }
+
+      // 5. Send IEP Draft to Parent (48 business/school hours before)
+      if (!student.iepDraftSentDate) {
+        const sendDue = addSchoolDays(mDate, -deadlines.iepDraftSent); // 2 school days before
+        const sendDays = getDaysRemaining(sendDue);
+        timelines.push({
+          type: "IEP Send Draft",
+          label: student.isReeval ? "Send Re-eval / IEP Draft to Parents" : "Send IEP Draft to Parents",
+          desc: "Deliver completed draft IEP & Zoom link to parent (48 school hours rule).",
+          dueDate: sendDue,
+          daysRemaining: sendDays,
+          status: sendDays <= 0 ? "overdue" : sendDays <= 1 ? "warning" : "on-track",
+          mandatory: false
+        });
+      }
+    }
+
+    // Post-Meeting Tasks
+    if (effectiveMeetingDate && getDaysRemaining(effectiveMeetingDate) <= 0 && !student.iepPhysicalFileCompleted) {
+      // Finalize IEP (5 days legal / 1 day Ariel)
+      if (!student.iepFinalizedDate) {
+        const finDue = addDays(effectiveMeetingDate, 1);
+        const finDays = getDaysRemaining(finDue);
+        timelines.push({
+          type: "IEP Finalization",
+          label: student.isReeval ? "Finalize Re-eval & Pulse IEP" : "Finalize Pulse IEP",
+          desc: "Submit and lock finalized IEP document. Legal deadline: 5 days post-meeting.",
+          dueDate: finDue,
+          daysRemaining: finDays,
+          status: finDays < 0 ? "overdue" : "warning",
+          mandatory: true
+        });
+      }
+
+      // Print IEP at a Glance (next day)
+      if (student.iepFinalizedDate && !student.iepAtAGlancePrinted) {
+        const printDue = addDays(student.iepFinalizedDate, 1);
+        const printDays = getDaysRemaining(printDue);
+        timelines.push({
+          type: "IEP Print Glance",
+          label: "Print IEP at a Glance",
+          desc: "Generate and print 1-page teacher summary report.",
+          dueDate: printDue,
+          daysRemaining: printDays,
+          status: printDays < 0 ? "overdue" : "warning",
+          mandatory: false,
+          actionNeeded: "Print Glance"
+        });
+      }
+
+      // IEP at a Glance Signatures (Friday deadline)
+      if (student.iepFinalizedDate && !student.iepAtAGlanceSignaturesCompleted) {
+        timelines.push({
+          type: "IEP Friday Signatures",
+          label: "At a Glance Friday Signatures",
+          desc: "Collect signature checklist from non-attending classroom teachers.",
+          dueDate: "",
+          daysRemaining: null,
+          status: "warning",
+          mandatory: false
+        });
       }
     }
 
@@ -765,38 +788,48 @@ export class StudentStore {
       if (parsed) savedTeacherEmails = parsed;
     } catch(e) {}
     
-    // Load local cache if offline
+    // Load local cache / offline mode setting
+    const savedSaveToBrowser = getStorageItem("aegis_save_to_browser") === "true";
     let cachedStudents = null;
     let cachedScreenings = null;
+    let hasLocalCache = false;
     try {
-      cachedStudents = JSON.parse(getStorageItem("aegis_students"));
-      if (cachedStudents) {
-        cachedStudents = cachedStudents.map(student => {
-          if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
-            student.iepDueDate = student.iepReviewDate;
-            delete student.iepReviewDate;
-          }
-          // Normalize accommodations to objects, preserving empties and duplicates
-          if (Array.isArray(student.accommodations)) {
-            student.accommodations = student.accommodations.map(a => typeof a === 'string' ? { label: a, notes: [] } : a);
-          } else {
-            student.accommodations = [];
-          }
-          if (!student.updatedAt) {
-            student.updatedAt = new Date().toISOString();
-          }
-          return student;
-        });
+      const rawStudents = getStorageItem("aegis_students");
+      const rawScreenings = getStorageItem("aegis_screenings");
+      if (rawStudents) {
+        cachedStudents = JSON.parse(rawStudents);
+        if (cachedStudents && Array.isArray(cachedStudents) && cachedStudents.length > 0) {
+          hasLocalCache = true;
+          cachedStudents = cachedStudents.map(student => {
+            if (student.iepReviewDate !== undefined && student.iepDueDate === undefined) {
+              student.iepDueDate = student.iepReviewDate;
+              delete student.iepReviewDate;
+            }
+            // Normalize accommodations to objects, preserving empties and duplicates
+            if (Array.isArray(student.accommodations)) {
+              student.accommodations = student.accommodations.map(a => typeof a === 'string' ? { label: a, notes: [] } : a);
+            } else {
+              student.accommodations = [];
+            }
+            if (!student.updatedAt) {
+              student.updatedAt = new Date().toISOString();
+            }
+            return student;
+          });
+        }
       }
 
-      cachedScreenings = JSON.parse(getStorageItem("aegis_screenings"));
-      if (cachedScreenings) {
-        cachedScreenings = cachedScreenings.map(s => {
-          if (!s.updatedAt) {
-            s.updatedAt = new Date().toISOString();
-          }
-          return s;
-        });
+      if (rawScreenings) {
+        cachedScreenings = JSON.parse(rawScreenings);
+        if (cachedScreenings && Array.isArray(cachedScreenings) && cachedScreenings.length > 0) {
+          hasLocalCache = true;
+          cachedScreenings = cachedScreenings.map(s => {
+            if (!s.updatedAt) {
+              s.updatedAt = new Date().toISOString();
+            }
+            return s;
+          });
+        }
       }
     } catch (e) {
       console.error("Local cache load failed", e);
@@ -807,6 +840,26 @@ export class StudentStore {
     const isTokenValid = savedAccessToken && savedTokenExpiry && Date.now() < savedTokenExpiry;
     const savedConnectedEmail = getStorageItem("aegis_connected_email") || null;
     const savedLastSyncedAt = getStorageItem("aegis_last_synced_at") || null;
+
+    // Per-Device Independent Safety Flag:
+    // If this device's browser already has local student/screening data, we protect it (pendingLocalSync: true)
+    // so it is NEVER wiped until Google Drive sync verifies receipt of these records.
+    const pendingLocalSync = hasLocalCache;
+
+    // Cloud-first data loading:
+    // If saveToBrowser is OFF and there is no pending local cache, initialize empty when disconnected
+    // so users are guided to connect Google Drive rather than viewing stale/out-of-sync local mocks.
+    let initialStudents = [];
+    let initialScreenings = [];
+
+    if (savedSaveToBrowser || pendingLocalSync) {
+      initialStudents = cachedStudents || INITIAL_STUDENTS;
+      initialScreenings = cachedScreenings || INITIAL_SCREENINGS;
+    } else if (isTokenValid) {
+      // Token is valid; will fetch from Google Drive momentarily. Use cached or mock as transition if present.
+      initialStudents = cachedStudents || [];
+      initialScreenings = cachedScreenings || [];
+    }
 
     this.state = {
       theme: savedTheme,
@@ -820,6 +873,12 @@ export class StudentStore {
       allDataFileId: getStorageItem("aegis_all_data_fid") || null,
       parentPortalFileId: getStorageItem("aegis_parent_fid") || null,
       aegisFolderId: getStorageItem("aegis_folder_id") || null,
+
+      // Save Data to Browser (Offline Mode) configuration
+      saveToBrowser: savedSaveToBrowser,
+      pendingLocalSync: pendingLocalSync,
+      offlineEditsCount: 0,
+      dismissedOfflineAlert: false,
       
       // Email parameters
       workEmail: savedWorkEmail,
@@ -831,8 +890,8 @@ export class StudentStore {
       holidays: savedHolidays,
 
       // Data Arrays
-      students: cachedStudents || INITIAL_STUDENTS,
-      screenings: cachedScreenings || INITIAL_SCREENINGS,
+      students: initialStudents,
+      screenings: initialScreenings,
       
       // UI State
       activeTab: "dashboard",
@@ -962,9 +1021,20 @@ export class StudentStore {
           }
         }
         
-        // Save database cache in localStorage for instant offline access
-        localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
-        localStorage.setItem("aegis_screenings", JSON.stringify(this.state.screenings));
+        if (newState.saveToBrowser !== undefined) {
+          localStorage.setItem("aegis_save_to_browser", newState.saveToBrowser ? "true" : "false");
+        }
+        
+        // Save database cache in localStorage only if Save to Browser (Offline Mode) is enabled
+        // OR if there is a pending local sync that has not yet been verified & uploaded to Google Drive.
+        if (this.state.saveToBrowser || this.state.pendingLocalSync) {
+          localStorage.setItem("aegis_students", JSON.stringify(this.state.students));
+          localStorage.setItem("aegis_screenings", JSON.stringify(this.state.screenings));
+        } else {
+          // If offline mode is OFF and pending local sync is complete, do not keep raw student data in localStorage
+          localStorage.removeItem("aegis_students");
+          localStorage.removeItem("aegis_screenings");
+        }
       } catch (e) {
         console.error("localStorage update failed", e);
       }
@@ -1048,7 +1118,7 @@ export class StudentStore {
 
   // Check Token Validity
   isTokenValid() {
-    return this.state.accessToken && this.state.tokenExpiry && Date.now() < this.state.tokenExpiry;
+    return Boolean(this.state.accessToken && this.state.tokenExpiry && Date.now() < this.state.tokenExpiry);
   }
 
   // Merge local and cloud data based on updatedAt timestamps
@@ -1196,14 +1266,14 @@ export class StudentStore {
     mergeEntities("students");
     mergeEntities("screenings");
 
-    // Settings and configuration merge
-    merged.workEmail = cloudData.workEmail || localData.workEmail || "ariel.facilitator@rcschools.net";
-    merged.emailAlertsEnabled = cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : localData.emailAlertsEnabled;
-    merged.calendarSyncEnabled = cloudData.calendarSyncEnabled !== undefined ? cloudData.calendarSyncEnabled : localData.calendarSyncEnabled;
-    merged.teacherEmails = { ...(localData.teacherEmails || {}), ...(cloudData.teacherEmails || {}) };
-    merged.reportCardDates = cloudData.reportCardDates || localData.reportCardDates || DEFAULT_REPORT_CARD_DATES;
-    merged.deadlines = { ...DEFAULT_DEADLINES, ...(localData.deadlines || {}), ...(cloudData.deadlines || {}) };
-    merged.holidays = (cloudData.holidays && cloudData.holidays.length > 0) ? cloudData.holidays : (localData.holidays || DEFAULT_HOLIDAYS);
+    // Settings and configuration merge (local modifications take precedence when saving/syncing from local workstation)
+    merged.workEmail = localData.workEmail || cloudData.workEmail || "ariel.facilitator@rcschools.net";
+    merged.emailAlertsEnabled = localData.emailAlertsEnabled !== undefined ? localData.emailAlertsEnabled : (cloudData.emailAlertsEnabled !== undefined ? cloudData.emailAlertsEnabled : true);
+    merged.calendarSyncEnabled = localData.calendarSyncEnabled !== undefined ? localData.calendarSyncEnabled : (cloudData.calendarSyncEnabled !== undefined ? cloudData.calendarSyncEnabled : false);
+    merged.teacherEmails = { ...(cloudData.teacherEmails || {}), ...(localData.teacherEmails || {}) };
+    merged.reportCardDates = localData.reportCardDates || cloudData.reportCardDates || DEFAULT_REPORT_CARD_DATES;
+    merged.deadlines = { ...DEFAULT_DEADLINES, ...(cloudData.deadlines || {}), ...(localData.deadlines || {}) };
+    merged.holidays = (localData.holidays && localData.holidays.length > 0) ? localData.holidays : (cloudData.holidays || DEFAULT_HOLIDAYS);
 
     return { merged, conflicts, stats };
   }
@@ -1465,7 +1535,9 @@ export class StudentStore {
           syncStatus: "synced",
           lastSyncedAt: new Date().toISOString(),
           flashingGreen: true,
-          hasUndoBackup: false
+          hasUndoBackup: false,
+          pendingLocalSync: false,
+          offlineEditsCount: 0
         });
         setTimeout(() => this.updateState({ flashingGreen: false }), 800);
         return { merged: this.state, conflicts: [], stats: { localAdded: 0, cloudAdded: 0 } };
@@ -1561,6 +1633,8 @@ export class StudentStore {
         conflicts: [],
         mergedData: null,
         flashingGreen: true,
+        pendingLocalSync: false,
+        offlineEditsCount: 0,
         hasUndoBackup: stats.localAdded > 0 || stats.cloudAdded > 0 || stats.conflicted > 0
       });
 
@@ -1605,8 +1679,10 @@ export class StudentStore {
 
   // Debounced Auto-Save & Sync back to Google Drive (2-way merge)
   triggerCloudSave() {
-    // If not logged in, just keep saving locally
+    // If not logged in, increment offlineEditsCount and record state locally if allowed
     if (!this.isTokenValid()) {
+      const newCount = (this.state.offlineEditsCount || 0) + 1;
+      this.updateState({ offlineEditsCount: newCount });
       return;
     }
 
@@ -1621,6 +1697,16 @@ export class StudentStore {
         console.error("Auto-sync save failed", err);
       }
     }, 1200); // 1.2 second debounce
+  }
+
+  // Toggle Save Data to Browser (Offline Mode)
+  toggleSaveToBrowser(enable) {
+    this.updateState({ saveToBrowser: !!enable });
+  }
+
+  // Dismiss Offline Alert banner for the current session
+  dismissOfflineAlert() {
+    this.updateState({ dismissedOfflineAlert: true });
   }
 
   // ==========================================
@@ -1788,7 +1874,7 @@ export class StudentStore {
       {
         id: `screen-${Date.now()}`,
         status: "Quick Survey",
-        referralDate: new Date().toISOString().split("T")[0],
+        referralDate: getTodayISO(),
         surveyPriorTestingCheck: false,
         surveyEslCheck: false,
         surveyDcsCheck: false,
@@ -1879,14 +1965,14 @@ export class StudentStore {
       classroomTeacher: screening.classroomTeacher,
       classroomTeacherEmail: screening.classroomTeacherEmail || "",
       status: "Active",
-      iepDueDate: addDays(new Date().toISOString().split("T")[0], 30), // Initial IEP due within 30 days of placement!
-      reevalDueDate: addDays(new Date().toISOString().split("T")[0], 3 * 365), // 3 years later
+      iepDueDate: addDays(getTodayISO(), 30), // Initial IEP due within 30 days of placement!
+      reevalDueDate: addDays(getTodayISO(), 3 * 365), // 3 years later
       accommodations: (initialAccommodations || []).map(a => typeof a === 'string' ? { label: a, notes: [] } : a),
       selNeeds: {
         type: "Asynchronous Development",
         details: "Undergoing initial placement assessment. Identify core overexcitabilities.",
         strategies: ["Dynamic interest-based pacing"],
-        logs: [{ date: new Date().toISOString().split("T")[0], note: "Placement finalized from evaluation grid." }]
+        logs: [{ date: getTodayISO(), note: "Placement finalized from evaluation grid." }]
       },
       progressReports: [],
       iepMeetingDate: "",
@@ -1920,7 +2006,7 @@ export class StudentStore {
       if (s.id === studentId) {
         const logs = s.selNeeds ? [...(s.selNeeds.logs || [])] : [];
         logs.unshift({
-          date: new Date().toISOString().split("T")[0],
+          date: getTodayISO(),
           note: noteStr
         });
         return {
@@ -1994,7 +2080,7 @@ export class StudentStore {
         if (t.daysRemaining < 0) return weekOffset === 0; // only include overdue in current week summary
         if (!t.dueDate) return false;
         
-        const dueDateObj = new Date(t.dueDate);
+        const dueDateObj = new Date(t.dueDate + "T12:00:00");
         dueDateObj.setHours(0, 0, 0, 0);
         
         return dueDateObj >= startOfWeek && dueDateObj <= endOfWeek;

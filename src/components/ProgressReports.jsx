@@ -3,7 +3,7 @@
    ========================================== */
 
 import React, { useState } from "react";
-import { store } from "../utils/studentStore";
+import { store, getTodayISO } from "../utils/studentStore";
 import { FileText, Save, CheckCircle, Download, FileSpreadsheet } from "lucide-react";
 
 export default function ProgressReports({ students, saveProgressReport }) {
@@ -166,7 +166,7 @@ export default function ProgressReports({ students, saveProgressReport }) {
     if (!activeStudent) return;
     saveProgressReport(activeStudent.id, {
       quarter,
-      date: new Date().toISOString().split("T")[0],
+      date: getTodayISO(),
       goals: updatedGoals,
       generalComment: updatedGeneralComment !== undefined ? updatedGeneralComment : generalComment
     });
@@ -240,7 +240,7 @@ export default function ProgressReports({ students, saveProgressReport }) {
 
     saveProgressReport(activeStudent.id, {
       quarter,
-      date: new Date().toISOString().split("T")[0],
+      date: getTodayISO(),
       goals: compiledGoals,
       generalComment
     });
