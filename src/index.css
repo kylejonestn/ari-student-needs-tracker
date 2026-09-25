@@ -1019,7 +1019,7 @@ button, input, select, textarea {
   align-items: flex-start;
   justify-content: space-between;
   position: relative;
-  min-width: 650px;
+  min-width: 760px;
   padding: 0 16px;
 }
 

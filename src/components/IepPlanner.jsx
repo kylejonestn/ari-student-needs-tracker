@@ -62,13 +62,26 @@ const getIepStageIndex = (student) => {
   const isStage5Complete = student.iepDraftWrittenDate && student.iepDraftSentDate;
   if (!isStage5Complete) return 5;
   
-  const isStage6Complete = student.iepFinalizedDate && student.iepAtAGlancePrinted && student.iepAtAGlanceSignaturesCompleted && student.iepPulseUploadCompleted && student.iepSharePointUploadCompleted && student.iepPhysicalFileCompleted;
+  // Stage 6: Meeting & Finalize (Day of meeting)
+  const isStage6Complete = !!student.iepFinalizedDate;
   if (!isStage6Complete) return 6;
-  
-  return 7; // Completed everything
+
+  // Stage 7: At-A-Glance & Signatures (1 day after Finalize Date)
+  const isStage7Complete = !!student.iepAtAGlancePrinted && !!student.iepAtAGlanceSignaturesCompleted;
+  if (!isStage7Complete) return 7;
+
+  // Stage 8: Pulse, PWN & Parent Copy (2 days after Finalize Date)
+  const isStage8Complete = !!student.iepPulseUploadCompleted && !!student.iepPwnWritten && !!student.iepFinalCopySentParent;
+  if (!isStage8Complete) return 8;
+
+  // Stage 9: Update Physical SPED File (4 days after Finalize Date)
+  const isStage9Complete = !!student.iepPhysicalFileCompleted;
+  if (!isStage9Complete) return 9;
+
+  return 10; // Completed everything
 };
 
-// Helper to determine the current active stage dynamically (0 to 9) for Re-eval
+// Helper to determine the current active stage dynamically (0 to 12) for Re-eval
 const getReevalStageIndex = (student) => {
   // Stage 0: August Prep
   const isStage0Complete = student.augustSetupComplete || (student.iepAugustLetterSent && student.iepGenEdInvitesSent);
@@ -106,11 +119,23 @@ const getReevalStageIndex = (student) => {
   const isStage8Complete = student.iepDraftWrittenDate && student.iepDraftSentDate;
   if (!isStage8Complete) return 8;
   
-  // Stage 9: Meeting & Finalize
-  const isStage9Complete = student.iepFinalizedDate && student.iepAtAGlancePrinted && student.iepAtAGlanceSignaturesCompleted && student.iepPulseUploadCompleted && student.iepSharePointUploadCompleted && student.iepPhysicalFileCompleted && student.reevalMeetingCompleted;
+  // Stage 9: Meeting & Finalize (Day of meeting)
+  const isStage9Complete = !!student.iepFinalizedDate && !!student.reevalMeetingCompleted;
   if (!isStage9Complete) return 9;
-  
-  return 10; // Completed everything
+
+  // Stage 10: At-A-Glance & Signatures (1 day after Finalize Date)
+  const isStage10Complete = !!student.iepAtAGlancePrinted && !!student.iepAtAGlanceSignaturesCompleted;
+  if (!isStage10Complete) return 10;
+
+  // Stage 11: Pulse, PWN & Parent Copy (2 days after Finalize Date)
+  const isStage11Complete = !!student.iepPulseUploadCompleted && !!student.iepPwnWritten && !!student.iepFinalCopySentParent;
+  if (!isStage11Complete) return 11;
+
+  // Stage 12: Update Physical SPED File (4 days after Finalize Date)
+  const isStage12Complete = !!student.iepPhysicalFileCompleted;
+  if (!isStage12Complete) return 12;
+
+  return 13; // Completed everything
 };
 
 export default function IepPlanner({ students = [], updateStudent }) {
@@ -241,7 +266,10 @@ export default function IepPlanner({ students = [], updateStudent }) {
     { label: "Teacher Checklist", short: "Teacher Check" },
     { label: "Data Gathering (Data Check)", short: "Data Check" },
     { label: "Drafting & Delivery", short: "Draft & Deliv" },
-    { label: "Meeting & Finalize", short: "Finalize" }
+    { label: "Meeting & Finalize", short: "Finalize" },
+    { label: "At-A-Glance & Signatures", short: "At-A-Glance" },
+    { label: "Pulse, PWN & Parent Copy", short: "PWN & Uploads" },
+    { label: "Update Physical SPED File", short: "SPED File" }
   ];
 
   // Stages of the Re-eval timeline stepper
@@ -255,13 +283,17 @@ export default function IepPlanner({ students = [], updateStudent }) {
     { label: "Psychologist Handoff", short: "Psych Handoff" },
     { label: "Data Gathering (Data Check)", short: "Data Check" },
     { label: "Drafting & Delivery", short: "Draft & Deliv" },
-    { label: "Meeting & Finalize", short: "Finalize" }
+    { label: "Meeting & Finalize", short: "Finalize" },
+    { label: "At-A-Glance & Signatures", short: "At-A-Glance" },
+    { label: "Pulse, PWN & Parent Copy", short: "PWN & Uploads" },
+    { label: "Update Physical SPED File", short: "SPED File" }
   ];
 
   const getStageDueDate = (student, idx, raw = false) => {
     const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
     if (student.isReeval) {
       const meetingDate = student.reevalMeetingDate || student.iepMeetingDate;
+      const finalizeBase = student.iepFinalizedDate || meetingDate;
       let val = "";
       switch (idx) {
         case 0:
@@ -294,12 +326,22 @@ export default function IepPlanner({ students = [], updateStudent }) {
         case 9:
           val = meetingDate || "TBD";
           break;
+        case 10:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1) : "TBD";
+          break;
+        case 11:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepPulseAndPwn || 2) : "TBD";
+          break;
+        case 12:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4) : "TBD";
+          break;
         default:
           val = "";
       }
       return raw ? val : formatDate(val);
     } else {
       const meetingDate = student.iepMeetingDate;
+      const finalizeBase = student.iepFinalizedDate || meetingDate;
       let val = "";
       switch (idx) {
         case 0:
@@ -322,6 +364,15 @@ export default function IepPlanner({ students = [], updateStudent }) {
           break;
         case 6:
           val = meetingDate || "TBD";
+          break;
+        case 7:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1) : "TBD";
+          break;
+        case 8:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepPulseAndPwn || 2) : "TBD";
+          break;
+        case 9:
+          val = finalizeBase ? addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4) : "TBD";
           break;
         default:
           val = "";
@@ -800,66 +851,172 @@ export default function IepPlanner({ students = [], updateStudent }) {
           </div>
         );
 
-      case 6: // Meeting & Finalize
+      case 6: // Meeting & Finalize (Day of meeting)
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-              Hold meeting, finalize Pulse, print At-A-Glance for signature tracking, upload online resources, and archive physical paperwork.
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+              Hold meeting and finalize the IEP documents in TN Pulse on the day of the meeting.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>IEP Finalized Date (locked on Pulse)</label>
-                  <input 
-                    type="date"
-                    className="input-field"
-                    value={student.iepFinalizedDate || ""}
-                    onChange={(e) => updateStudent(student.id, { iepFinalizedDate: e.target.value })}
-                  />
-                </div>
-                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", marginTop: "6px" }}>
-                  <input 
-                    type="checkbox"
-                    checked={!!student.iepAtAGlancePrinted}
-                    onChange={(e) => updateStudent(student.id, { iepAtAGlancePrinted: e.target.checked })}
-                  />
-                  <span>IEP At-A-Glance Summary Printed</span>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr", 
+              gap: "16px",
+              padding: "16px",
+              borderRadius: "8px",
+              backgroundColor: "var(--bg-primary)",
+              border: "1px solid var(--border-color)",
+              alignItems: "center"
+            }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: "12px", marginBottom: "4px", display: "block" }}>
+                  IEP Finalized Date (locked on Pulse)
                 </label>
-                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
-                  <input 
-                    type="checkbox"
-                    checked={!!student.iepAtAGlanceSignaturesCompleted}
-                    onChange={(e) => updateStudent(student.id, { iepAtAGlanceSignaturesCompleted: e.target.checked })}
-                  />
-                  <strong>At-A-Glance Teacher Signatures Complete</strong>
-                </label>
+                <input 
+                  type="date"
+                  className="input-field"
+                  value={student.iepFinalizedDate || ""}
+                  onChange={(e) => updateStudent(student.id, { iepFinalizedDate: e.target.value })}
+                  style={{ fontSize: "12px" }}
+                />
               </div>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {student.iepFinalizedDate ? (
+                  <span style={{ fontSize: "12px", color: "var(--accent-emerald)", fontWeight: "600" }}>
+                    ✔ IEP document locked & finalized on {student.iepFinalizedDate}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                    Meeting date: <strong>{student.iepMeetingDate || student.reevalMeetingDate || "Date TBD"}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", justifyContent: "center" }}>
-                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+      case 7: // At-A-Glance & Signatures (1 day after Finalize Date)
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+              Print 1-page teacher summary and obtain signatures from all classroom teachers (due 1 day after Finalize Date).
+            </p>
+            <div style={{ 
+              display: "flex", 
+              flexDirection: "column", 
+              gap: "12px",
+              padding: "16px",
+              borderRadius: "8px",
+              backgroundColor: "var(--bg-primary)",
+              border: "1px solid var(--border-color)"
+            }}>
+              <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
+                <input 
+                  type="checkbox"
+                  checked={!!student.iepAtAGlancePrinted}
+                  onChange={(e) => updateStudent(student.id, { iepAtAGlancePrinted: e.target.checked })}
+                  style={{ width: "16px", height: "16px" }}
+                />
+                <span style={{ fontSize: "13px" }}>IEP At-A-Glance Summary Printed</span>
+              </label>
+
+              <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
+                <input 
+                  type="checkbox"
+                  checked={!!student.iepAtAGlanceSignaturesCompleted}
+                  onChange={(e) => updateStudent(student.id, { iepAtAGlanceSignaturesCompleted: e.target.checked })}
+                  style={{ width: "16px", height: "16px" }}
+                />
+                <strong style={{ fontSize: "13px" }}>At-A-Glance Teacher Signatures Complete</strong>
+              </label>
+            </div>
+          </div>
+        );
+
+      case 8: // Pulse, PWN & Parent Copy (2 days after Finalize Date)
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+              Upload signed documents to TN Pulse, write Prior Written Notice, and deliver final copy to parent (due 2 days after Finalize Date).
+            </p>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr", 
+              gap: "14px",
+              padding: "16px",
+              borderRadius: "8px",
+              backgroundColor: "var(--bg-primary)",
+              border: "1px solid var(--border-color)"
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
                   <input 
                     type="checkbox"
                     checked={!!student.iepPulseUploadCompleted}
                     onChange={(e) => updateStudent(student.id, { iepPulseUploadCompleted: e.target.checked })}
+                    style={{ width: "16px", height: "16px" }}
                   />
-                  <span>Signed IEP Uploaded to TN Pulse</span>
+                  <strong style={{ fontSize: "13px" }}>Upload Signed IEP to TN Pulse</strong>
                 </label>
-                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+
+                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
+                  <input 
+                    type="checkbox"
+                    checked={!!student.iepPwnWritten}
+                    onChange={(e) => updateStudent(student.id, { iepPwnWritten: e.target.checked })}
+                    style={{ width: "16px", height: "16px" }}
+                  />
+                  <strong style={{ fontSize: "13px" }}>Write Prior Written Notice (PWN)</strong>
+                </label>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
+                  <input 
+                    type="checkbox"
+                    checked={!!student.iepFinalCopySentParent}
+                    onChange={(e) => updateStudent(student.id, { iepFinalCopySentParent: e.target.checked })}
+                    style={{ width: "16px", height: "16px" }}
+                  />
+                  <strong style={{ fontSize: "13px" }}>Send Final Copy to Parent</strong>
+                </label>
+
+                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
                   <input 
                     type="checkbox"
                     checked={!!student.iepSharePointUploadCompleted}
                     onChange={(e) => updateStudent(student.id, { iepSharePointUploadCompleted: e.target.checked })}
+                    style={{ width: "16px", height: "16px" }}
                   />
-                  <span>Signed IEP Uploaded to SharePoint</span>
+                  <span style={{ fontSize: "13px" }}>Signed IEP Uploaded to SharePoint</span>
                 </label>
-                <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
-                  <input 
-                    type="checkbox"
-                    checked={!!student.iepPhysicalFileCompleted}
-                    onChange={(e) => updateStudent(student.id, { iepPhysicalFileCompleted: e.target.checked })}
-                  />
-                  <strong>Physical Document Archived in Cume Folder</strong>
-                </label>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 9: // Update Physical SPED File (4 days after Finalize Date)
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-muted)", margin: 0 }}>
+              Archive physical paperwork and update student SPED folder (due 4 days after Finalize Date).
+            </p>
+            <div style={{ 
+              padding: "16px",
+              borderRadius: "8px",
+              backgroundColor: "var(--bg-primary)",
+              border: "1px solid var(--border-color)"
+            }}>
+              <label className="checkbox-label" style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", margin: 0 }}>
+                <input 
+                  type="checkbox"
+                  checked={!!student.iepPhysicalFileCompleted}
+                  onChange={(e) => updateStudent(student.id, { iepPhysicalFileCompleted: e.target.checked })}
+                  style={{ width: "16px", height: "16px" }}
+                />
+                <strong style={{ fontSize: "13px" }}>Update Physical SPED File</strong>
+              </label>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", paddingLeft: "26px" }}>
+                All physical copies filed in the student's confidential SPED folder.
               </div>
             </div>
           </div>
@@ -1149,6 +1306,15 @@ export default function IepPlanner({ students = [], updateStudent }) {
           </div>
         );
 
+      case 10: // At-A-Glance & Signatures
+        return renderIepStepContent(student, 7);
+
+      case 11: // Pulse, PWN & Parent Copy
+        return renderIepStepContent(student, 8);
+
+      case 12: // Update Physical SPED File
+        return renderIepStepContent(student, 9);
+
       default:
         return null;
     }
@@ -1375,6 +1541,20 @@ export default function IepPlanner({ students = [], updateStudent }) {
                               (!student.iepDraftSentDate && getDaysRemaining(sendDue) <= 0)) {
                             isWarning = true;
                           }
+                        } else if (idx === 9) {
+                          if (!student.iepFinalizedDate && getDaysRemaining(meetingDate) <= 0) isWarning = true;
+                        } else if (idx === 10) {
+                          const finalizeBase = student.iepFinalizedDate || meetingDate;
+                          const glanceDue = addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1);
+                          if ((!student.iepAtAGlancePrinted || !student.iepAtAGlanceSignaturesCompleted) && getDaysRemaining(glanceDue) <= 0) isWarning = true;
+                        } else if (idx === 11) {
+                          const finalizeBase = student.iepFinalizedDate || meetingDate;
+                          const uploadDue = addDays(finalizeBase, deadlines.iepPulseAndPwn || 2);
+                          if ((!student.iepPulseUploadCompleted || !student.iepPwnWritten || !student.iepFinalCopySentParent) && getDaysRemaining(uploadDue) <= 0) isWarning = true;
+                        } else if (idx === 12) {
+                          const finalizeBase = student.iepFinalizedDate || meetingDate;
+                          const spedDue = addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4);
+                          if (!student.iepPhysicalFileCompleted && getDaysRemaining(spedDue) <= 0) isWarning = true;
                         }
                       }
                     } else {
@@ -1401,6 +1581,20 @@ export default function IepPlanner({ students = [], updateStudent }) {
                               (!student.iepDraftSentDate && getDaysRemaining(sendDue) <= 0)) {
                             isWarning = true;
                           }
+                        } else if (idx === 6) {
+                          if (!student.iepFinalizedDate && getDaysRemaining(student.iepMeetingDate) <= 0) isWarning = true;
+                        } else if (idx === 7) {
+                          const finalizeBase = student.iepFinalizedDate || student.iepMeetingDate;
+                          const glanceDue = addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1);
+                          if ((!student.iepAtAGlancePrinted || !student.iepAtAGlanceSignaturesCompleted) && getDaysRemaining(glanceDue) <= 0) isWarning = true;
+                        } else if (idx === 8) {
+                          const finalizeBase = student.iepFinalizedDate || student.iepMeetingDate;
+                          const uploadDue = addDays(finalizeBase, deadlines.iepPulseAndPwn || 2);
+                          if ((!student.iepPulseUploadCompleted || !student.iepPwnWritten || !student.iepFinalCopySentParent) && getDaysRemaining(uploadDue) <= 0) isWarning = true;
+                        } else if (idx === 9) {
+                          const finalizeBase = student.iepFinalizedDate || student.iepMeetingDate;
+                          const spedDue = addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4);
+                          if (!student.iepPhysicalFileCompleted && getDaysRemaining(spedDue) <= 0) isWarning = true;
                         }
                       }
                     }

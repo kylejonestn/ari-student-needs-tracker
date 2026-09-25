@@ -4,7 +4,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines, getDaysRemaining, getTodayISO, formatDateToISO, addDays, addSchoolDays } from "./studentStore.js";
+import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines, getDaysRemaining, getTodayISO, formatDateToISO, addDays, addSchoolDays, DEFAULT_DEADLINES } from "./studentStore.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -748,5 +748,79 @@ describe("Date and Timezone Handling", () => {
     assert.equal(addSchoolDays("2026-09-25", 1), "2026-09-28");
   });
 });
+
+describe("Post-Meeting Finalize Split & Deadlines", () => {
+  it("should define post-meeting deadlines in DEFAULT_DEADLINES", () => {
+    assert.equal(DEFAULT_DEADLINES.iepAtAGlanceSignatures, 1, "At-A-Glance signatures due 1 day post-finalize");
+    assert.equal(DEFAULT_DEADLINES.iepPulseAndPwn, 2, "Pulse & PWN due 2 days post-finalize");
+    assert.equal(DEFAULT_DEADLINES.iepPhysicalSpedFile, 4, "Physical SPED file due 4 days post-finalize");
+  });
+
+  it("should calculate post-meeting timeline tasks with the correct dates when meeting date has passed", () => {
+    const student = {
+      id: "stu-meeting-passed",
+      name: "Jordan Lee",
+      status: "Active",
+      iepMeetingDate: "2026-09-20",
+      iepFinalizedDate: "2026-09-20",
+      iepAtAGlancePrinted: false,
+      iepAtAGlanceSignaturesCompleted: false,
+      iepPulseUploadCompleted: false,
+      iepPwnWritten: false,
+      iepFinalCopySentParent: false,
+      iepPhysicalFileCompleted: false
+    };
+
+    const timelines = calculateTimelines(student);
+
+    // 1. Finalize should NOT be in timeline because iepFinalizedDate is already set
+    const finTask = timelines.find(t => t.type === "IEP Finalization");
+    assert.equal(finTask, undefined, "Finalize task should be resolved once finalized");
+
+    // 2. Print Glance & Signatures due 1 day post-finalize (2026-09-21)
+    const printTask = timelines.find(t => t.type === "IEP Print Glance");
+    assert.ok(printTask, "Should generate IEP Print Glance milestone");
+    assert.equal(printTask.dueDate, "2026-09-21");
+
+    const sigTask = timelines.find(t => t.type === "IEP Friday Signatures");
+    assert.ok(sigTask, "Should generate At-A-Glance Teacher Signatures milestone");
+    assert.equal(sigTask.dueDate, "2026-09-21");
+
+    // 3. Pulse, PWN, Parent Copy due 2 days post-finalize (2026-09-22)
+    const pulsePwnTask = timelines.find(t => t.type === "IEP Pulse & PWN");
+    assert.ok(pulsePwnTask, "Should generate Pulse & PWN milestone");
+    assert.equal(pulsePwnTask.dueDate, "2026-09-22");
+
+    // 4. Physical SPED File due 4 days post-finalize (2026-09-24)
+    const spedTask = timelines.find(t => t.type === "IEP SPED File");
+    assert.ok(spedTask, "Should generate Update Physical SPED File milestone");
+    assert.equal(spedTask.dueDate, "2026-09-24");
+  });
+
+  it("should finalize day of meeting when iepFinalizedDate is not set", () => {
+    const student = {
+      id: "stu-meeting-today",
+      name: "Taylor Swift",
+      status: "Active",
+      iepMeetingDate: "2026-09-20",
+      iepFinalizedDate: "",
+      iepPhysicalFileCompleted: false
+    };
+
+    const timelines = calculateTimelines(student);
+    const finTask = timelines.find(t => t.type === "IEP Finalization");
+    assert.ok(finTask, "Should generate Finalize task on day of meeting");
+    assert.equal(finTask.dueDate, "2026-09-20", "Finalize is due on the day of meeting");
+  });
+
+  it("should initialize iepPwnWritten and iepFinalCopySentParent in addStudent", () => {
+    const store = new StudentStore();
+    store.addStudent({ name: "Morgan Freeman", grade: "8th" });
+    const added = store.getState().students.find(s => s.name === "Morgan Freeman");
+    assert.equal(added.iepPwnWritten, false);
+    assert.equal(added.iepFinalCopySentParent, false);
+  });
+});
+
 
 

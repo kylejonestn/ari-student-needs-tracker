@@ -127,9 +127,21 @@ export default function Dashboard({ students, screenings, updateScreening }) {
               stepIndex = 8;
               break;
             case "IEP Finalization":
+              stepIndex = 9;
+              break;
             case "IEP Print Glance":
             case "IEP Friday Signatures":
-              stepIndex = 9;
+            case "IEP At-A-Glance":
+              stepIndex = 10;
+              break;
+            case "IEP Pulse & PWN":
+            case "IEP Uploads":
+            case "IEP Send Final Copy":
+              stepIndex = 11;
+              break;
+            case "IEP SPED File":
+            case "Update Physical SPED File":
+              stepIndex = 12;
               break;
             default:
               stepIndex = 0;
@@ -156,9 +168,21 @@ export default function Dashboard({ students, screenings, updateScreening }) {
               stepIndex = 5;
               break;
             case "IEP Finalization":
+              stepIndex = 6;
+              break;
             case "IEP Print Glance":
             case "IEP Friday Signatures":
-              stepIndex = 6;
+            case "IEP At-A-Glance":
+              stepIndex = 7;
+              break;
+            case "IEP Pulse & PWN":
+            case "IEP Uploads":
+            case "IEP Send Final Copy":
+              stepIndex = 8;
+              break;
+            case "IEP SPED File":
+            case "Update Physical SPED File":
+              stepIndex = 9;
               break;
             default:
               stepIndex = 0;
@@ -326,13 +350,15 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     store.updateStudent(studentId, {
       iepAtAGlanceSignaturesCompleted: true,
       iepPulseUploadCompleted: true,
+      iepPwnWritten: true,
+      iepFinalCopySentParent: true,
       iepSharePointUploadCompleted: true,
       iepPhysicalFileCompleted: true,
       iepMeetingDate: "" // Clear meeting date since workflow concluded
     });
 
-    pushActivity(`Concluded Friday Bulk Signatures & Cume File updates for ${student.name}.`);
-    alert(`IEP at a Glance signatures & administrative uploads checked off for ${student.name}!`);
+    pushActivity(`Concluded Friday Bulk Signatures & SPED File updates for ${student.name}.`);
+    alert(`IEP at a Glance signatures, PWN, uploads & physical SPED file checked off for ${student.name}!`);
   };
 
   const storeState = store.getState();
@@ -872,7 +898,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                     </label>
                     <label style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                       <input type="checkbox" defaultChecked={false} />
-                      <span>File in Physical Cume Folder</span>
+                      <span>Update Physical SPED File</span>
                     </label>
                   </div>
                   <button 
@@ -880,7 +906,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                     style={{ width: "100%", padding: "5px", fontSize: "11px" }}
                     onClick={() => handleFinalizeFridaySignatures(student.id)}
                   >
-                    Conclude IEP & File Folder
+                    Conclude IEP & Update SPED File
                   </button>
                 </div>
               ))}

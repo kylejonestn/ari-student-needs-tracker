@@ -99,6 +99,9 @@ export const DEFAULT_DEADLINES = {
   iepTransitionSurvey: 6,        // School Days
   iepDraftWritten: 4,            // School Days
   iepDraftSent: 2,               // School Days
+  iepAtAGlanceSignatures: 1,     // Calendar Days after Finalize
+  iepPulseAndPwn: 2,             // Calendar Days after Finalize
+  iepPhysicalSpedFile: 4         // Calendar Days after Finalize
 };
 
 // Helper to format Date object into YYYY-MM-DD in local time
@@ -575,14 +578,14 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Post-Meeting Tasks
     if (effectiveMeetingDate && getDaysRemaining(effectiveMeetingDate) <= 0 && !student.iepPhysicalFileCompleted) {
-      // Finalize IEP (5 days legal / 1 day Ariel)
+      // 1. Finalize IEP (On the day of the meeting)
       if (!student.iepFinalizedDate) {
-        const finDue = addDays(effectiveMeetingDate, 1);
+        const finDue = effectiveMeetingDate;
         const finDays = getDaysRemaining(finDue);
         timelines.push({
           type: "IEP Finalization",
           label: student.isReeval ? "Finalize Re-eval & Pulse IEP" : "Finalize Pulse IEP",
-          desc: "Submit and lock finalized IEP document. Legal deadline: 5 days post-meeting.",
+          desc: "Submit and lock finalized IEP document on the day of the meeting.",
           dueDate: finDue,
           daysRemaining: finDays,
           status: finDays < 0 ? "overdue" : "warning",
@@ -590,31 +593,62 @@ export const calculateTimelines = (student, isScreening = false) => {
         });
       }
 
-      // Print IEP at a Glance (next day)
-      if (student.iepFinalizedDate && !student.iepAtAGlancePrinted) {
-        const printDue = addDays(student.iepFinalizedDate, 1);
-        const printDays = getDaysRemaining(printDue);
+      const finalizeBase = student.iepFinalizedDate || effectiveMeetingDate;
+
+      // 2. Print IEP at a Glance & Signatures (1 day after Finalize Date)
+      const glanceDue = addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1);
+      const glanceDays = getDaysRemaining(glanceDue);
+      if (!student.iepAtAGlancePrinted) {
         timelines.push({
           type: "IEP Print Glance",
           label: "Print IEP at a Glance",
-          desc: "Generate and print 1-page teacher summary report.",
-          dueDate: printDue,
-          daysRemaining: printDays,
-          status: printDays < 0 ? "overdue" : "warning",
+          desc: "Generate and print 1-page teacher summary report (1 day post-finalize).",
+          dueDate: glanceDue,
+          daysRemaining: glanceDays,
+          status: glanceDays < 0 ? "overdue" : "warning",
           mandatory: false,
           actionNeeded: "Print Glance"
         });
       }
 
-      // IEP at a Glance Signatures (Friday deadline)
-      if (student.iepFinalizedDate && !student.iepAtAGlanceSignaturesCompleted) {
+      if (!student.iepAtAGlanceSignaturesCompleted) {
         timelines.push({
           type: "IEP Friday Signatures",
-          label: "At a Glance Friday Signatures",
-          desc: "Collect signature checklist from non-attending classroom teachers.",
-          dueDate: "",
-          daysRemaining: null,
-          status: "warning",
+          label: "At-A-Glance Teacher Signatures",
+          desc: "Collect signature checklist from classroom teachers (1 day post-finalize).",
+          dueDate: glanceDue,
+          daysRemaining: glanceDays,
+          status: glanceDays < 0 ? "overdue" : "warning",
+          mandatory: false
+        });
+      }
+
+      // 3. Upload Signed IEP to TN Pulse, Write Prior Written Notice, Send Final Copy to Parent (2 days after Finalize Date)
+      const uploadDue = addDays(finalizeBase, deadlines.iepPulseAndPwn || 2);
+      const uploadDays = getDaysRemaining(uploadDue);
+      if (!student.iepPulseUploadCompleted || !student.iepPwnWritten || !student.iepFinalCopySentParent) {
+        timelines.push({
+          type: "IEP Pulse & PWN",
+          label: "Uploads, PWN & Parent Copy",
+          desc: "Upload signed IEP to Pulse, write PWN, and send final copy to parent (2 days post-finalize).",
+          dueDate: uploadDue,
+          daysRemaining: uploadDays,
+          status: uploadDays < 0 ? "overdue" : "warning",
+          mandatory: true
+        });
+      }
+
+      // 4. Update Physical SPED File (4 days after Finalize Date)
+      const spedDue = addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4);
+      const spedDays = getDaysRemaining(spedDue);
+      if (!student.iepPhysicalFileCompleted) {
+        timelines.push({
+          type: "IEP SPED File",
+          label: "Update Physical SPED File",
+          desc: "Archive physical paperwork and update student SPED folder (4 days post-finalize).",
+          dueDate: spedDue,
+          daysRemaining: spedDays,
+          status: spedDays < 0 ? "overdue" : "warning",
           mandatory: false
         });
       }
@@ -1736,6 +1770,8 @@ export class StudentStore {
         iepAtAGlanceSignaturesCompleted: false,
         iepPulseUploadCompleted: false,
         iepSharePointUploadCompleted: false,
+        iepPwnWritten: false,
+        iepFinalCopySentParent: false,
         iepPhysicalFileCompleted: false,
         augustSetupComplete: false,
         classroomTeacherEmail: student.classroomTeacherEmail || "",
@@ -1766,6 +1802,8 @@ export class StudentStore {
         iepAtAGlanceSignaturesCompleted: false,
         iepPulseUploadCompleted: false,
         iepSharePointUploadCompleted: false,
+        iepPwnWritten: false,
+        iepFinalCopySentParent: false,
         iepPhysicalFileCompleted: false,
         augustSetupComplete: false,
         classroomTeacherEmail: student.classroomTeacherEmail || "",
@@ -1988,6 +2026,8 @@ export class StudentStore {
       iepAtAGlanceSignaturesCompleted: false,
       iepPulseUploadCompleted: false,
       iepSharePointUploadCompleted: false,
+      iepPwnWritten: false,
+      iepFinalCopySentParent: false,
       iepPhysicalFileCompleted: false,
       augustSetupComplete: false,
       updatedAt: new Date().toISOString()
