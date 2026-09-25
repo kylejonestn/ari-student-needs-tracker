@@ -5,6 +5,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { StudentStore, getDifferences, normalizeToISODate, calculateTimelines, getDaysRemaining, getTodayISO, formatDateToISO, addDays, addSchoolDays, DEFAULT_DEADLINES } from "./studentStore.js";
+import { driveService } from "./driveService.js";
 
 describe("Smart Cloud Sync - mergeWithCloud", () => {
   const store = new StudentStore();
@@ -819,6 +820,176 @@ describe("Post-Meeting Finalize Split & Deadlines", () => {
     const added = store.getState().students.find(s => s.name === "Morgan Freeman");
     assert.equal(added.iepPwnWritten, false);
     assert.equal(added.iepFinalCopySentParent, false);
+  });
+});
+
+describe("Race Condition & Rapid Checkbox Sync Safety", () => {
+  it("should preserve fresher live local record when user clicks checkbox during sync", () => {
+    const store = new StudentStore();
+    const liveLocalList = [
+      { id: "stu-1", name: "Student 1", iepAtAGlancePrinted: true, updatedAt: "2026-09-24T12:00:05.000Z" }
+    ];
+    const mergedList = [
+      { id: "stu-1", name: "Student 1", iepAtAGlancePrinted: false, updatedAt: "2026-09-24T12:00:00.000Z" }
+    ];
+
+    const result = store.reconcileWithLiveLocal(mergedList, liveLocalList);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].iepAtAGlancePrinted, true, "Fresher live local click MUST be preserved");
+  });
+
+  it("should adopt merged cloud changes when live local record was untouched", () => {
+    const store = new StudentStore();
+    const liveLocalList = [
+      { id: "stu-1", name: "Student 1", iepAtAGlancePrinted: false, updatedAt: "2026-09-24T10:00:00.000Z" }
+    ];
+    const mergedList = [
+      { id: "stu-1", name: "Student 1", iepAtAGlancePrinted: true, updatedAt: "2026-09-24T11:00:00.000Z" }
+    ];
+
+    const result = store.reconcileWithLiveLocal(mergedList, liveLocalList);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].iepAtAGlancePrinted, true, "Should adopt merged cloud change when local is older");
+  });
+
+  it("should preserve items added locally while sync was in-flight", () => {
+    const store = new StudentStore();
+    const liveLocalList = [
+      { id: "stu-1", name: "Existing Student", updatedAt: "2026-09-24T10:00:00.000Z" },
+      { id: "stu-new", name: "Brand New Student", updatedAt: "2026-09-24T12:00:05.000Z" }
+    ];
+    const mergedList = [
+      { id: "stu-1", name: "Existing Student", updatedAt: "2026-09-24T10:00:00.000Z" }
+    ];
+
+    const result = store.reconcileWithLiveLocal(mergedList, liveLocalList);
+    assert.equal(result.length, 2);
+    assert.ok(result.some(s => s.id === "stu-new"), "New local student must be retained");
+  });
+
+  it("should lock concurrent syncs and queue a followup sync when called while sync is in-flight", async () => {
+    const store = new StudentStore();
+    store.updateState({ accessToken: "mock-token", tokenExpiry: Date.now() + 3600000 });
+
+    const origFindFolder = driveService.findFolder;
+    const origFindFile = driveService.findFile;
+    const origReadFile = driveService.readFile;
+    const origGetFileMeta = driveService.getFileMeta;
+    const origUpdateFile = driveService.updateFile;
+    const origCreateFile = driveService.createFile;
+
+    try {
+      driveService.findFolder = async () => "folder-123";
+      driveService.findFile = async () => "file-123";
+      driveService.getFileMeta = async () => ({ modifiedTime: "2026-09-24T10:00:00.000Z" });
+      driveService.createFile = async () => "file-123";
+      driveService.updateFile = async () => ({ id: "file-123" });
+      
+      // Delay readFile to simulate slow network I/O
+      driveService.readFile = async () => {
+        await new Promise(r => setTimeout(r, 60));
+        return { students: store.getState().students, screenings: [] };
+      };
+
+      assert.equal(store.syncInProgress, false);
+      const syncPromise1 = store.syncToCloud(true);
+      assert.equal(store.syncInProgress, true);
+
+      // Second sync call arrives while first is in-flight
+      const syncPromise2 = store.syncToCloud(true);
+      assert.equal(store.pendingFollowupSync, true, "Should set pendingFollowupSync when sync called while busy");
+      assert.equal(syncPromise1, syncPromise2, "Should return existing active sync promise");
+
+      await syncPromise1;
+      assert.equal(store.syncInProgress, false, "syncInProgress should reset to false");
+    } finally {
+      if (store.debounceTimer) {
+        clearTimeout(store.debounceTimer);
+        store.debounceTimer = null;
+      }
+      driveService.findFolder = origFindFolder;
+      driveService.findFile = origFindFile;
+      driveService.readFile = origReadFile;
+      driveService.getFileMeta = origGetFileMeta;
+      driveService.updateFile = origUpdateFile;
+      driveService.createFile = origCreateFile;
+    }
+  });
+
+  it("should prevent overwriting rapid consecutive checkbox toggles during in-flight network requests", async () => {
+    const store = new StudentStore();
+    store.updateState({
+      accessToken: "mock-token",
+      tokenExpiry: Date.now() + 3600000,
+      students: [
+        {
+          id: "stu-rapid-test",
+          name: "Rapid Clicker",
+          status: "Active",
+          iepAtAGlancePrinted: false,
+          iepAtAGlanceSignaturesCompleted: false,
+          updatedAt: "2026-09-24T10:00:00.000Z"
+        }
+      ]
+    });
+
+    const origFindFolder = driveService.findFolder;
+    const origFindFile = driveService.findFile;
+    const origReadFile = driveService.readFile;
+    const origGetFileMeta = driveService.getFileMeta;
+    const origUpdateFile = driveService.updateFile;
+    const origCreateFile = driveService.createFile;
+
+    try {
+      driveService.findFolder = async () => "folder-123";
+      driveService.findFile = async () => "file-123";
+      driveService.getFileMeta = async () => ({ modifiedTime: "2026-09-24T10:00:00.000Z" });
+      driveService.createFile = async () => "file-123";
+      driveService.updateFile = async () => ({ id: "file-123" });
+      
+      // Delay readFile to simulate network latency
+      driveService.readFile = async () => {
+        await new Promise(r => setTimeout(r, 50));
+        return {
+          students: [
+            {
+              id: "stu-rapid-test",
+              name: "Rapid Clicker",
+              status: "Active",
+              iepAtAGlancePrinted: false,
+              iepAtAGlanceSignaturesCompleted: false,
+              updatedAt: "2026-09-24T10:00:00.000Z"
+            }
+          ],
+          screenings: []
+        };
+      };
+
+      // Start cloud sync
+      const syncPromise = store.syncToCloud(true);
+
+      // Simulate user rapidly clicking checkboxes while sync network request is in-flight!
+      store.updateStudent("stu-rapid-test", { iepAtAGlancePrinted: true });
+      store.updateStudent("stu-rapid-test", { iepAtAGlanceSignaturesCompleted: true });
+
+      // Wait for sync to finish
+      await syncPromise;
+
+      const updatedStu = store.getState().students.find(s => s.id === "stu-rapid-test");
+      assert.equal(updatedStu.iepAtAGlancePrinted, true, "First checkbox must NOT be overwritten by stale cloud data");
+      assert.equal(updatedStu.iepAtAGlanceSignaturesCompleted, true, "Second checkbox must NOT be overwritten by stale cloud data");
+    } finally {
+      if (store.debounceTimer) {
+        clearTimeout(store.debounceTimer);
+        store.debounceTimer = null;
+      }
+      driveService.findFolder = origFindFolder;
+      driveService.findFile = origFindFile;
+      driveService.readFile = origReadFile;
+      driveService.getFileMeta = origGetFileMeta;
+      driveService.updateFile = origUpdateFile;
+      driveService.createFile = origCreateFile;
+    }
   });
 });
 

@@ -774,6 +774,9 @@ export class StudentStore {
   constructor() {
     this.listeners = [];
     this.debounceTimer = null;
+    this.syncInProgress = false;
+    this.pendingFollowupSync = false;
+    this.activeSyncPromise = null;
     if (typeof window !== "undefined") {
       window.store = this;
     }
@@ -982,9 +985,14 @@ export class StudentStore {
         }
       };
       window.addEventListener("focus", handleWindowFocus);
+      window.addEventListener("beforeunload", () => {
+        this.flushDebouncedSave();
+      });
       if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") {
+          if (document.visibilityState === "hidden") {
+            this.flushDebouncedSave();
+          } else if (document.visibilityState === "visible") {
             handleWindowFocus();
           }
         });
@@ -1313,10 +1321,12 @@ export class StudentStore {
   }
 
   // Direct immediate write to Google Drive without debounce
-  async saveToCloudDirect(payload) {
+  async saveToCloudDirect(payload, updateSyncStatus = true) {
     if (!this.isTokenValid()) return;
     try {
-      this.updateState({ syncStatus: "saving" });
+      if (updateSyncStatus) {
+        this.updateState({ syncStatus: "saving" });
+      }
       
       let folderId = this.state.aegisFolderId;
       if (!folderId) {
@@ -1340,17 +1350,22 @@ export class StudentStore {
         parentFid = await driveService.createFile(this.state.accessToken, "parent-portal.json", parentPayload, folderId);
       }
 
-      this.updateState({
-        allDataFileId: allDataFid,
-        parentPortalFileId: parentFid,
-        syncStatus: "synced",
-        lastSyncedAt: new Date().toISOString(),
-        flashingGreen: true
-      });
-      setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+      if (updateSyncStatus) {
+        this.updateState({
+          allDataFileId: allDataFid,
+          parentPortalFileId: parentFid,
+          syncStatus: "synced",
+          lastSyncedAt: new Date().toISOString(),
+          flashingGreen: true
+        });
+        setTimeout(() => this.updateState({ flashingGreen: false }), 800);
+      }
+
+      return { allDataFid, parentFid, folderId };
     } catch (err) {
       console.error("Direct cloud save error", err);
       this.updateState({ syncStatus: "error", syncError: `Save failed: ${err.message}` });
+      throw err;
     }
   }
 
@@ -1533,12 +1548,107 @@ export class StudentStore {
     });
   }
 
+  // Reconcile entities merged from cloud with live in-memory state.
+  // If the user modified a student/screening locally while sync was in-flight,
+  // the live local record takes precedence to guarantee no rapid clicks are lost or overwritten.
+  reconcileWithLiveLocal(mergedList = [], liveLocalList = []) {
+    if (!Array.isArray(mergedList)) return liveLocalList || [];
+    if (!Array.isArray(liveLocalList)) return mergedList || [];
+
+    const liveMap = new Map(liveLocalList.map(item => [item.id, item]));
+    const processedLiveIds = new Set();
+    const reconciled = [];
+
+    for (const mergedItem of mergedList) {
+      if (!mergedItem || !mergedItem.id) continue;
+      processedLiveIds.add(mergedItem.id);
+      const liveItem = liveMap.get(mergedItem.id);
+
+      if (!liveItem) {
+        reconciled.push(mergedItem);
+        continue;
+      }
+
+      const liveTime = new Date(liveItem.updatedAt || 0).getTime();
+      const mergedTime = new Date(mergedItem.updatedAt || 0).getTime();
+
+      if (liveTime > mergedTime) {
+        // Live local item was modified AFTER this merged snapshot was taken!
+        // Live local must win to prevent clobbering rapid user edits.
+        reconciled.push(liveItem);
+      } else {
+        reconciled.push(mergedItem);
+      }
+    }
+
+    // Any items that were created locally while sync was in-flight
+    for (const liveItem of liveLocalList) {
+      if (liveItem && liveItem.id && !processedLiveIds.has(liveItem.id)) {
+        reconciled.push(liveItem);
+      }
+    }
+
+    return reconciled;
+  }
+
+  _hasNewerEdits(newerList = [], olderList = []) {
+    if (!Array.isArray(newerList) || !Array.isArray(olderList)) return false;
+    const olderMap = new Map(olderList.map(item => [item.id, item]));
+    for (const item of newerList) {
+      if (!item || !item.id) continue;
+      const old = olderMap.get(item.id);
+      if (!old) return true;
+      if (new Date(item.updatedAt || 0).getTime() > new Date(old.updatedAt || 0).getTime()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Flush any pending debounced save immediately (e.g. before page unload or visibility hide)
+  flushDebouncedSave() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+      if (this.isTokenValid()) {
+        this.syncToCloud(true).catch(e => console.warn("[Aegis Sync] Flush sync failed", e));
+      }
+    }
+  }
+
   // Smart cloud sync method that merges instead of overwriting with Optimistic Concurrency Control
-  async syncToCloud(isSilent = false, retryCount = 0) {
+  // Protected with concurrency lock and non-clobbering local reconciliation.
+  syncToCloud(isSilent = false, retryCount = 0) {
     if (!this.isTokenValid()) {
       this.connectGoogleDrive();
-      return;
+      return Promise.resolve();
     }
+
+    // Mutex Lock: If sync is already in flight, flag pending followup sync and return existing promise
+    if (this.syncInProgress) {
+      this.pendingFollowupSync = true;
+      return this.activeSyncPromise;
+    }
+
+    this.syncInProgress = true;
+    this.activeSyncPromise = (async () => {
+      try {
+        return await this._executeSyncToCloud(isSilent, retryCount);
+      } finally {
+        this.syncInProgress = false;
+        this.activeSyncPromise = null;
+        if (this.pendingFollowupSync) {
+          this.pendingFollowupSync = false;
+          // Trigger follow-up auto-save to persist changes made while previous sync was in-flight
+          this.triggerCloudSave(100);
+        }
+      }
+    })();
+
+    return this.activeSyncPromise;
+  }
+
+  async _executeSyncToCloud(isSilent = false, retryCount = 0) {
     try {
       this.updateState({ syncStatus: "connecting", syncError: null });
       
@@ -1564,7 +1674,7 @@ export class StudentStore {
           deadlines: this.state.deadlines,
           holidays: this.state.holidays
         };
-        await this.saveToCloudDirect(payload);
+        await this.saveToCloudDirect(payload, false);
         this.updateState({
           syncStatus: "synced",
           lastSyncedAt: new Date().toISOString(),
@@ -1603,7 +1713,7 @@ export class StudentStore {
             console.log(`[Aegis Sync] Concurrent write detected on another workstation. Auto-merging fresh changes (attempt ${retryCount + 1})...`);
             // Brief random jitter (100ms - 300ms) to allow the other device's write to settle
             await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
-            return this.syncToCloud(isSilent, retryCount + 1);
+            return await this._executeSyncToCloud(isSilent, retryCount + 1);
           }
         } catch (e) {
           console.warn("[Aegis Sync] Concurrency check bypassed", e);
@@ -1636,32 +1746,49 @@ export class StudentStore {
 
       const nowIso = new Date().toISOString();
 
+      // Pre-save reconciliation: reconcile merged results against current live local state
+      // in case user clicked checkboxes or made edits while reading Drive / checking OCC
+      const payloadStudents = this.reconcileWithLiveLocal(merged.students, this.state.students);
+      const payloadScreenings = this.reconcileWithLiveLocal(merged.screenings, this.state.screenings);
+
       // Directly write the merged result back to Google Drive
-      await this.saveToCloudDirect({
-        students: merged.students || this.state.students,
-        screenings: merged.screenings || this.state.screenings,
-        workEmail: merged.workEmail || this.state.workEmail,
-        emailAlertsEnabled: merged.emailAlertsEnabled !== undefined ? merged.emailAlertsEnabled : this.state.emailAlertsEnabled,
-        calendarSyncEnabled: merged.calendarSyncEnabled !== undefined ? merged.calendarSyncEnabled : this.state.calendarSyncEnabled,
-        teacherEmails: merged.teacherEmails || this.state.teacherEmails,
-        reportCardDates: merged.reportCardDates || this.state.reportCardDates,
-        deadlines: merged.deadlines || this.state.deadlines,
-        holidays: merged.holidays || this.state.holidays
-      });
+      const saveResult = await this.saveToCloudDirect({
+        students: payloadStudents,
+        screenings: payloadScreenings,
+        workEmail: this.state.workEmail || merged.workEmail,
+        emailAlertsEnabled: this.state.emailAlertsEnabled !== undefined ? this.state.emailAlertsEnabled : merged.emailAlertsEnabled,
+        calendarSyncEnabled: this.state.calendarSyncEnabled !== undefined ? this.state.calendarSyncEnabled : merged.calendarSyncEnabled,
+        teacherEmails: { ...(merged.teacherEmails || {}), ...(this.state.teacherEmails || {}) },
+        reportCardDates: this.state.reportCardDates || merged.reportCardDates,
+        deadlines: { ...(merged.deadlines || {}), ...(this.state.deadlines || {}) },
+        holidays: (this.state.holidays && this.state.holidays.length > 0) ? this.state.holidays : (merged.holidays || DEFAULT_HOLIDAYS)
+      }, false);
+
+      const actualAllDataFileId = (saveResult && saveResult.allDataFid) || fileId;
+      const actualFolderId = (saveResult && saveResult.folderId) || folderId;
+
+      // Post-save reconciliation: reconcile AGAIN against live state in case user edited while writing Drive
+      const finalStudents = this.reconcileWithLiveLocal(payloadStudents, this.state.students);
+      const finalScreenings = this.reconcileWithLiveLocal(payloadScreenings, this.state.screenings);
+
+      // If user performed fresh local edits while save was in-flight, ensure followup sync runs
+      if (this._hasNewerEdits(finalStudents, payloadStudents) || this._hasNewerEdits(finalScreenings, payloadScreenings)) {
+        this.pendingFollowupSync = true;
+      }
 
       // No conflicts -> apply merged data and immediately update cloud
       this.updateState({
-        allDataFileId: fileId,
-        aegisFolderId: folderId,
-        students: merged.students || this.state.students,
-        screenings: merged.screenings || this.state.screenings,
-        workEmail: merged.workEmail || this.state.workEmail,
-        emailAlertsEnabled: merged.emailAlertsEnabled !== undefined ? merged.emailAlertsEnabled : this.state.emailAlertsEnabled,
-        calendarSyncEnabled: merged.calendarSyncEnabled !== undefined ? merged.calendarSyncEnabled : this.state.calendarSyncEnabled,
-        teacherEmails: merged.teacherEmails || this.state.teacherEmails,
-        reportCardDates: merged.reportCardDates || this.state.reportCardDates,
-        deadlines: merged.deadlines || this.state.deadlines,
-        holidays: merged.holidays || this.state.holidays,
+        allDataFileId: actualAllDataFileId,
+        aegisFolderId: actualFolderId,
+        students: finalStudents,
+        screenings: finalScreenings,
+        workEmail: this.state.workEmail || merged.workEmail,
+        emailAlertsEnabled: this.state.emailAlertsEnabled !== undefined ? this.state.emailAlertsEnabled : merged.emailAlertsEnabled,
+        calendarSyncEnabled: this.state.calendarSyncEnabled !== undefined ? this.state.calendarSyncEnabled : merged.calendarSyncEnabled,
+        teacherEmails: { ...(merged.teacherEmails || {}), ...(this.state.teacherEmails || {}) },
+        reportCardDates: this.state.reportCardDates || merged.reportCardDates,
+        deadlines: { ...(merged.deadlines || {}), ...(this.state.deadlines || {}) },
+        holidays: (this.state.holidays && this.state.holidays.length > 0) ? this.state.holidays : (merged.holidays || DEFAULT_HOLIDAYS),
         syncStatus: "synced",
         lastSyncedAt: nowIso,
         conflicts: [],
@@ -1674,10 +1801,11 @@ export class StudentStore {
 
       setTimeout(() => this.updateState({ flashingGreen: false }), 800);
 
-      return { merged, conflicts: [], stats };
+      return { merged: { ...merged, students: finalStudents, screenings: finalScreenings }, conflicts: [], stats };
     } catch (err) {
       console.error(err);
       this.updateState({ syncStatus: "error", syncError: `Cloud Sync Failed: ${err.message}` });
+      throw err;
     }
   }
 
@@ -1712,7 +1840,7 @@ export class StudentStore {
   }
 
   // Debounced Auto-Save & Sync back to Google Drive (2-way merge)
-  triggerCloudSave() {
+  triggerCloudSave(delay = 400) {
     // If not logged in, increment offlineEditsCount and record state locally if allowed
     if (!this.isTokenValid()) {
       const newCount = (this.state.offlineEditsCount || 0) + 1;
@@ -1724,13 +1852,21 @@ export class StudentStore {
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
+    if (delay === 0) {
+      this.debounceTimer = null;
+      this.syncToCloud(true).catch(err => {
+        console.error("Auto-sync save failed", err);
+      });
+      return;
+    }
+
     this.debounceTimer = setTimeout(async () => {
       try {
         await this.syncToCloud(true);
       } catch (err) {
         console.error("Auto-sync save failed", err);
       }
-    }, 1200); // 1.2 second debounce
+    }, delay);
   }
 
   // Toggle Save Data to Browser (Offline Mode)
