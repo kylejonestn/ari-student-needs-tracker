@@ -244,6 +244,8 @@ export default function App() {
                   students={students}
                   screenings={screenings}
                   updateScreening={(id, fields) => store.updateScreening(id, fields)}
+                  interactiveChecklistMode={storeState.interactiveChecklistMode}
+                  seenChecklistTeaser={storeState.seenChecklistTeaser}
                 />
               )}
               {activeTab === "students" && (
@@ -300,6 +302,7 @@ export default function App() {
                   workEmail={storeState.workEmail}
                   saveToBrowser={storeState.saveToBrowser}
                   pendingLocalSync={storeState.pendingLocalSync}
+                  interactiveChecklistMode={storeState.interactiveChecklistMode}
                 />
               )}
             </>

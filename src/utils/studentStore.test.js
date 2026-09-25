@@ -993,5 +993,44 @@ describe("Race Condition & Rapid Checkbox Sync Safety", () => {
   });
 });
 
+describe("Interactive Dashboard Checklists & Teaser Banner", () => {
+  it("should default interactiveChecklistMode to false (off by default)", () => {
+    const store = new StudentStore();
+    assert.equal(store.getState().interactiveChecklistMode, false, "Must be off by default");
+  });
 
+  it("should default seenChecklistTeaser to false", () => {
+    const store = new StudentStore();
+    assert.equal(store.getState().seenChecklistTeaser, false, "Must not be seen by default");
+  });
 
+  it("should allow toggling interactiveChecklistMode", () => {
+    const store = new StudentStore();
+    store.toggleInteractiveChecklistMode(true);
+    assert.equal(store.getState().interactiveChecklistMode, true);
+
+    store.toggleInteractiveChecklistMode(false);
+    assert.equal(store.getState().interactiveChecklistMode, false);
+
+    store.toggleInteractiveChecklistMode();
+    assert.equal(store.getState().interactiveChecklistMode, true);
+  });
+
+  it("should dismiss teaser keeping feature off when enableFeature is false", () => {
+    const store = new StudentStore();
+    store.updateState({ interactiveChecklistMode: false, seenChecklistTeaser: false });
+    store.dismissChecklistTeaser(false);
+
+    assert.equal(store.getState().seenChecklistTeaser, true);
+    assert.equal(store.getState().interactiveChecklistMode, false);
+  });
+
+  it("should dismiss teaser and turn feature on when enableFeature is true (Try It Out)", () => {
+    const store = new StudentStore();
+    store.updateState({ interactiveChecklistMode: false, seenChecklistTeaser: false });
+    store.dismissChecklistTeaser(true);
+
+    assert.equal(store.getState().seenChecklistTeaser, true);
+    assert.equal(store.getState().interactiveChecklistMode, true);
+  });
+});

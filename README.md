@@ -103,6 +103,20 @@ The **Main Dashboard (`Dashboard.jsx`)** acts as the central command center, syn
 * Checkboxes are live-bound to `studentStore.js` and auto-saved to Google Drive.
 * Facilitators can click **Complete All Post-Meeting Tasks** to mark all filing steps finished in one click.
 
+### 4. Interactive Dashboard Checklist Mode (Optional / Off by Default)
+Aegis includes an optional direct checklist mode allowing facilitators to mark tasks complete directly from the main timeline cards:
+* **One-Time Feature Teaser Banner**:
+  * Facilitators are introduced to the feature via an elegant, non-intrusive teaser banner on the dashboard.
+  * Options: **"Try It Out (Turn On)"** or **"Keep Default (Off)"**, plus one-click dismissal. Once interacted with, it never appears again (`seenChecklistTeaser`).
+* **Header Checklist Mode Toggle**:
+  * An in-header toggle button (`Checklist Mode: ON / OFF`) allows switching between view-only mode and interactive checklist mode anytime.
+  * Also configurable in **Settings & Cloud Sync** under Workflow preferences.
+* **Foolproof Checklist Safeguards**:
+  * **Accidental Click Guard (4-Second Undo Grace Period)**: When a task is checked off, it remains visible with a green completed badge and an immediate **"Undo"** button for 4 seconds before smoothly dissolving from the active view.
+  * **Smart Field Mapping**: Automatically populates date timestamps (`iepInvitationSentDate`, `iepFinalizedDate`, etc.) and sets composite boolean tasks safely.
+  * **"Show Completed Tasks" Filter**: Toggle to review all tasks completed in the current period and uncheck/reopen any item if needed.
+  * **Cloud Sync Safety**: All completions immediately benefit from the mutex lock, non-clobbering local reconciliation, and debounced Google Drive backup.
+
 ---
 
 ## ⚡ Smart Cloud Sync & Concurrency Engine

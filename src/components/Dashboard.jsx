@@ -2,7 +2,7 @@
    Aegis Gifted Tracker - Dashboard Component
    ========================================== */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   store,
   calculateTimelines, 
@@ -28,10 +28,25 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
-  Info
+  Info,
+  Check,
+  RotateCcw,
+  X
 } from "lucide-react";
 
-export default function Dashboard({ students, screenings, updateScreening }) {
+export default function Dashboard({ 
+  students, 
+  screenings, 
+  updateScreening,
+  interactiveChecklistMode: propChecklistMode,
+  seenChecklistTeaser: propSeenTeaser
+}) {
+  const interactiveChecklistMode = propChecklistMode !== undefined ? propChecklistMode : !!store.getState().interactiveChecklistMode;
+  const seenChecklistTeaser = propSeenTeaser !== undefined ? propSeenTeaser : !!store.getState().seenChecklistTeaser;
+
+  const [recentlyCompleted, setRecentlyCompleted] = useState({});
+  const [showCompleted, setShowCompleted] = useState(false);
+
   const [activityLog, setActivityLog] = useState([
     { id: 1, time: "10:30 AM", msg: "Automated email summary of weekly deadlines generated for Ariel." },
     { id: 2, time: "Yesterday", msg: "Calendar synced 3 new IEP meeting schedules to RCS Outlook." }
@@ -40,6 +55,15 @@ export default function Dashboard({ students, screenings, updateScreening }) {
   const [showAugustSetup, setShowAugustSetup] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState("thisWeek"); // "thisWeek" | "nextWeek"
   const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "activeWeek", "overdue"
+
+  // Clean up any unexpired undo timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(recentlyCompleted).forEach(entry => {
+        if (entry?.timerId) clearTimeout(entry.timerId);
+      });
+    };
+  }, []);
 
   const handleTimelineClick = (t) => {
     if (t.category === "Screening") {
@@ -281,6 +305,545 @@ export default function Dashboard({ students, screenings, updateScreening }) {
       : defaultWeeklyTimelines
   ).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
 
+  // Determine if a timeline item is a checkable task vs an overarching countdown
+  const isTaskCheckable = (t) => {
+    if (!t) return false;
+    if (
+      t.type === "IEP Due Date" || 
+      t.type === "Triennial Re-evaluation" || 
+      t.type === "60-Day Evaluation" || 
+      t.type === "Psychologist 60-Day Evaluation" ||
+      t.type === "IEP Progress Report"
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  // Maps a timeline task to studentStore update fields and their exact undo counterpart
+  const getTaskCompletionDiff = (t, studentOrScreening) => {
+    if (t.category === "Active") {
+      switch (t.type) {
+        case "August Setup":
+          return {
+            updates: { augustSetupComplete: true },
+            undoValues: { augustSetupComplete: false }
+          };
+        case "August Calendar":
+          return {
+            updates: { augustTeacherInvitesSent: true, augustParentLetterSent: true },
+            undoValues: { augustTeacherInvitesSent: false, augustParentLetterSent: false }
+          };
+        case "IEP Invitation":
+          return {
+            updates: { iepInvitationSentDate: getTodayISO() },
+            undoValues: { iepInvitationSentDate: "" }
+          };
+        case "IEP Invitation Follow-Up":
+          return {
+            updates: { iepInvitationResponseReceived: true },
+            undoValues: { iepInvitationResponseReceived: false }
+          };
+        case "IEP Data Mining":
+          return {
+            updates: { iepDataMiningCompleted: true },
+            undoValues: { iepDataMiningCompleted: false }
+          };
+        case "IEP Transition Survey":
+          return {
+            updates: { iepTransitionSurveyCompleted: true },
+            undoValues: { iepTransitionSurveyCompleted: false }
+          };
+        case "IEP Writing":
+          return {
+            updates: { iepDraftWrittenDate: getTodayISO() },
+            undoValues: { iepDraftWrittenDate: "" }
+          };
+        case "IEP Send Draft":
+          return {
+            updates: { iepDraftSentDate: getTodayISO() },
+            undoValues: { iepDraftSentDate: "" }
+          };
+        case "IEP Finalization":
+          return {
+            updates: { iepFinalizedDate: getTodayISO() },
+            undoValues: { iepFinalizedDate: "" }
+          };
+        case "IEP Print Glance":
+          return {
+            updates: { iepAtAGlancePrinted: true },
+            undoValues: { iepAtAGlancePrinted: false }
+          };
+        case "IEP Friday Signatures":
+          return {
+            updates: { iepAtAGlanceSignaturesCompleted: true },
+            undoValues: { iepAtAGlanceSignaturesCompleted: false }
+          };
+        case "IEP Pulse & PWN":
+          return {
+            updates: { 
+              iepPulseUploadCompleted: true, 
+              iepPwnWritten: true, 
+              iepFinalCopySentParent: true, 
+              iepSharePointUploadCompleted: true 
+            },
+            undoValues: { 
+              iepPulseUploadCompleted: false, 
+              iepPwnWritten: false, 
+              iepFinalCopySentParent: false, 
+              iepSharePointUploadCompleted: false 
+            }
+          };
+        case "IEP SPED File":
+          return {
+            updates: { iepPhysicalFileCompleted: true },
+            undoValues: { iepPhysicalFileCompleted: false }
+          };
+        case "Re-eval Schedule":
+          return {
+            updates: { reevalMeetingDate: getTodayISO() },
+            undoValues: { reevalMeetingDate: "" }
+          };
+        case "Re-eval Invitation":
+          return {
+            updates: { reevalInvitationSentDate: getTodayISO() },
+            undoValues: { reevalInvitationSentDate: "" }
+          };
+        case "Re-eval Observation":
+          return {
+            updates: { reevalDirectObservationCompleted: true },
+            undoValues: { reevalDirectObservationCompleted: false }
+          };
+        case "Re-eval Surveys Check":
+          return {
+            updates: { 
+              reevalParentSurveyReturned: true, 
+              reevalTeacherSurveyReturned: true, 
+              reevalSelfSurveyCompleted: true 
+            },
+            undoValues: { 
+              reevalParentSurveyReturned: false, 
+              reevalTeacherSurveyReturned: false, 
+              reevalSelfSurveyCompleted: false 
+            }
+          };
+        case "Re-eval Psych Handoff":
+          return {
+            updates: { reevalPsychologistHandoffDate: getTodayISO() },
+            undoValues: { reevalPsychologistHandoffDate: "" }
+          };
+        default:
+          return null;
+      }
+    } else if (t.category === "Screening") {
+      switch (t.type) {
+        case "Quick Survey":
+          return {
+            updates: { status: "Consent Pending" },
+            undoValues: { status: "Quick Survey" }
+          };
+        case "Consent Pending":
+          return {
+            updates: { status: "Evaluation in Progress", consentReceivedDate: getTodayISO() },
+            undoValues: { status: "Consent Pending", consentReceivedDate: "" }
+          };
+        case "Teacher Input Checklist":
+          return {
+            updates: { teacherChecklistSigned: true },
+            undoValues: { teacherChecklistSigned: false }
+          };
+        case "Academic Check-in":
+          return {
+            updates: { matrix: { ...(studentOrScreening?.matrix || {}), performance: { score: 10, option: "standard" } } },
+            undoValues: { matrix: { ...(studentOrScreening?.matrix || {}), performance: { score: null, option: "" } } }
+          };
+        case "Creativity Check-in":
+          return {
+            updates: { matrix: { ...(studentOrScreening?.matrix || {}), creativity: { score: 10, option: "standard" } } },
+            undoValues: { matrix: { ...(studentOrScreening?.matrix || {}), creativity: { score: null, option: "" } } }
+          };
+        case "Informed Consent":
+          return {
+            updates: { informedConsentCompleted: true, status: "Permission to Test Pending" },
+            undoValues: { informedConsentCompleted: false, status: "Informed Consent" }
+          };
+        case "Permission to Test":
+          return {
+            updates: { permissionToTestReceivedDate: getTodayISO(), status: "Psych Results Pending" },
+            undoValues: { permissionToTestReceivedDate: "", status: "Permission to Test Pending" }
+          };
+        case "Psychologist Check-in":
+          return {
+            updates: { psychResultsReceived: true },
+            undoValues: { psychResultsReceived: false }
+          };
+        case "Meeting Invitation":
+          return {
+            updates: { meetingInvitationSentDate: getTodayISO() },
+            undoValues: { meetingInvitationSentDate: "" }
+          };
+        case "Placement Meeting":
+          return {
+            updates: { status: "Placed" },
+            undoValues: { status: "Meeting Scheduled" }
+          };
+        case "Pending Discontinuation":
+          return {
+            updates: { status: "Archived" },
+            undoValues: { status: "Pending Discontinuation" }
+          };
+        default:
+          return null;
+      }
+    }
+    return null;
+  };
+
+  // Compile tasks that are already completed for active students and screenings
+  const getHistoricalCompletedTasks = () => {
+    const list = [];
+    students.filter(s => !s.deleted && s.status === "Active").forEach(s => {
+      if (s.iepFinalizedDate) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Finalization",
+          label: s.isReeval ? "Finalize Re-eval & Pulse IEP" : "Finalize Pulse IEP",
+          desc: `Completed and locked on ${s.iepFinalizedDate}.`,
+          dueDate: s.iepFinalizedDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepAtAGlancePrinted) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Print Glance",
+          label: "Print IEP at a Glance",
+          desc: "Teacher 1-page summary printed.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepAtAGlanceSignaturesCompleted) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Friday Signatures",
+          label: "At-A-Glance Teacher Signatures",
+          desc: "Classroom teacher signatures collected.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepPulseUploadCompleted && s.iepPwnWritten && s.iepFinalCopySentParent) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Pulse & PWN",
+          label: "Uploads, PWN & Parent Copy",
+          desc: "Pulse upload, PWN, and parent copy complete.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepPhysicalFileCompleted) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP SPED File",
+          label: "Update Physical SPED File",
+          desc: "Physical paperwork and SPED folder archived.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepInvitationSentDate) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Invitation",
+          label: "Send IEP Team Invitation",
+          desc: `Invitation sent on ${s.iepInvitationSentDate}.`,
+          dueDate: s.iepInvitationSentDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepDataMiningCompleted) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Data Mining",
+          label: "Academic Data Mining",
+          desc: "TCAP, Mastery Connect, and AIMSweb scores mined.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepTransitionSurveyCompleted) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Transition Survey",
+          label: "Student Transition Survey",
+          desc: "Student transition goals survey completed.",
+          dueDate: s.iepMeetingDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepDraftWrittenDate) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Writing",
+          label: s.isReeval ? "Write Re-eval / IEP Document Draft" : "Write IEP Document Draft",
+          desc: `IEP draft completed on ${s.iepDraftWrittenDate}.`,
+          dueDate: s.iepDraftWrittenDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.iepDraftSentDate) {
+        list.push({
+          studentId: s.id,
+          studentName: s.name,
+          category: "Active",
+          type: "IEP Send Draft",
+          label: s.isReeval ? "Send Re-eval / IEP Draft to Parents" : "Send IEP Draft to Parents",
+          desc: `Draft sent to parents on ${s.iepDraftSentDate}.`,
+          dueDate: s.iepDraftSentDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (s.isReeval) {
+        if (s.reevalDirectObservationCompleted) {
+          list.push({
+            studentId: s.id,
+            studentName: s.name,
+            category: "Active",
+            type: "Re-eval Observation",
+            label: "Conduct Classroom Observation",
+            desc: "Classroom observation notes completed.",
+            dueDate: s.reevalMeetingDate || "",
+            daysRemaining: 0,
+            status: "completed",
+            isCompleted: true
+          });
+        }
+        if (s.reevalParentSurveyReturned && s.reevalTeacherSurveyReturned && s.reevalSelfSurveyCompleted) {
+          list.push({
+            studentId: s.id,
+            studentName: s.name,
+            category: "Active",
+            type: "Re-eval Surveys Check",
+            label: "Complete Re-eval Surveys",
+            desc: "Parent, teacher, and self surveys returned.",
+            dueDate: s.reevalMeetingDate || "",
+            daysRemaining: 0,
+            status: "completed",
+            isCompleted: true
+          });
+        }
+        if (s.reevalPsychologistHandoffDate) {
+          list.push({
+            studentId: s.id,
+            studentName: s.name,
+            category: "Active",
+            type: "Re-eval Psych Handoff",
+            label: "Submit surveys to psych",
+            desc: `Surveys submitted on ${s.reevalPsychologistHandoffDate}.`,
+            dueDate: s.reevalPsychologistHandoffDate,
+            daysRemaining: 0,
+            status: "completed",
+            isCompleted: true
+          });
+        }
+      }
+    });
+
+    screenings.filter(s => !s.deleted && s.status !== "Archived" && s.status !== "Placed").forEach(sc => {
+      if (sc.teacherChecklistSigned) {
+        list.push({
+          studentId: sc.id,
+          studentName: sc.name,
+          category: "Screening",
+          type: "Teacher Input Checklist",
+          label: "Teacher Signature Needed",
+          desc: "Teacher behavior checklist received and signed.",
+          dueDate: sc.consentReceivedDate || "",
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (sc.permissionToTestReceivedDate) {
+        list.push({
+          studentId: sc.id,
+          studentName: sc.name,
+          category: "Screening",
+          type: "Permission to Test",
+          label: "Awaiting Psychologist Consent",
+          desc: `Signed permission received on ${sc.permissionToTestReceivedDate}.`,
+          dueDate: sc.permissionToTestReceivedDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+      if (sc.meetingInvitationSentDate) {
+        list.push({
+          studentId: sc.id,
+          studentName: sc.name,
+          category: "Screening",
+          type: "Meeting Invitation",
+          label: "Send Meeting Invitation",
+          desc: `Team invitation sent on ${sc.meetingInvitationSentDate}.`,
+          dueDate: sc.meetingInvitationSentDate,
+          daysRemaining: 0,
+          status: "completed",
+          isCompleted: true
+        });
+      }
+    });
+
+    return list;
+  };
+
+  // Toggle or uncheck a task directly from the timeline
+  const handleToggleTask = (t) => {
+    const taskKey = `${t.studentId}-${t.type}`;
+
+    // If it was recently completed, toggling it means undoing
+    if (recentlyCompleted[taskKey]) {
+      handleUndoTask(taskKey);
+      return;
+    }
+
+    const studentOrScreening = t.category === "Active" 
+      ? students.find(s => s.id === t.studentId)
+      : screenings.find(s => s.id === t.studentId);
+
+    const diff = getTaskCompletionDiff(t, studentOrScreening);
+    if (!diff) return;
+
+    // If it was already completed (e.g. from historical completed list), uncheck it
+    if (t.isCompleted) {
+      if (t.category === "Active") {
+        store.updateStudent(t.studentId, diff.undoValues);
+      } else {
+        store.updateScreening(t.studentId, diff.undoValues);
+      }
+      pushActivity(`Reopened "${t.label}" for ${t.studentName}.`);
+      return;
+    }
+
+    // Mark task completed
+    if (t.category === "Active") {
+      store.updateStudent(t.studentId, diff.updates);
+    } else {
+      store.updateScreening(t.studentId, diff.updates);
+    }
+    pushActivity(`Completed "${t.label}" for ${t.studentName}.`);
+
+    // Start 4-second undo grace window
+    const timerId = setTimeout(() => {
+      setRecentlyCompleted(prev => {
+        const next = { ...prev };
+        delete next[taskKey];
+        return next;
+      });
+    }, 4000);
+
+    setRecentlyCompleted(prev => ({
+      ...prev,
+      [taskKey]: {
+        timeline: t,
+        undoValues: diff.undoValues,
+        timerId,
+        expiresAt: Date.now() + 4000
+      }
+    }));
+  };
+
+  // Instant Undo handler during 4-second grace period
+  const handleUndoTask = (taskKey) => {
+    const entry = recentlyCompleted[taskKey];
+    if (!entry) return;
+
+    if (entry.timerId) {
+      clearTimeout(entry.timerId);
+    }
+
+    const t = entry.timeline;
+    if (t.category === "Active") {
+      store.updateStudent(t.studentId, entry.undoValues);
+    } else {
+      store.updateScreening(t.studentId, entry.undoValues);
+    }
+
+    setRecentlyCompleted(prev => {
+      const next = { ...prev };
+      delete next[taskKey];
+      return next;
+    });
+
+    pushActivity(`Undid completion of "${t.label}" for ${t.studentName}.`);
+  };
+
+  // Active recently completed items (currently in 4-second undo grace period)
+  const activeRecentlyCompleted = Object.values(recentlyCompleted).map(entry => ({
+    ...entry.timeline,
+    status: "completed",
+    isCompleted: true,
+    isRecentlyCompleted: true,
+    undoExpiresAt: entry.expiresAt
+  }));
+
+  // Historical completed items if showCompleted is checked
+  const historicalCompleted = showCompleted ? getHistoricalCompletedTasks() : [];
+
+  // Final displayed timelines combining active items, recently completed items, and completed items
+  const finalDisplayedTimelines = [
+    ...displayedTimelines,
+    ...activeRecentlyCompleted.filter(rc => !displayedTimelines.some(d => `${d.studentId}-${d.type}` === `${rc.studentId}-${rc.type}`)),
+    ...historicalCompleted.filter(hc => 
+      !displayedTimelines.some(d => `${d.studentId}-${d.type}` === `${hc.studentId}-${hc.type}`) &&
+      !activeRecentlyCompleted.some(rc => `${rc.studentId}-${rc.type}` === `${hc.studentId}-${hc.type}`)
+    )
+  ].sort((a, b) => {
+    if (a.isCompleted && !b.isCompleted) return 1;
+    if (!a.isCompleted && b.isCompleted) return -1;
+    return (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining);
+  });
+
   // Students with active post-meeting / finalize tasks pending
   const postMeetingStudents = students.filter(
     s => !s.deleted && s.status === "Active" && (s.iepMeetingDate || s.iepFinalizedDate) && !s.iepPhysicalFileCompleted
@@ -482,6 +1045,83 @@ export default function Dashboard({ students, screenings, updateScreening }) {
             >
               <RefreshCw size={14} />
               Connect & Sync Now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* New Feature Teaser: Interactive Dashboard Checklists */}
+      {!seenChecklistTeaser && (
+        <div 
+          className="glass-panel hide-print" 
+          style={{ 
+            marginBottom: "20px", 
+            padding: "16px 20px", 
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(168, 85, 247, 0.12) 100%)",
+            border: "1px solid var(--accent-purple)",
+            borderRadius: "12px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "16px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "14px", flex: 1, minWidth: "280px" }}>
+            <div style={{ 
+              width: "38px", 
+              height: "38px", 
+              borderRadius: "10px", 
+              background: "var(--accent-purple)", 
+              color: "#ffffff", 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-heading)" }}>
+                  New Feature: Quick-Action Dashboard Checklists!
+                </span>
+                <span style={{ 
+                  fontSize: "10px", 
+                  padding: "2px 8px", 
+                  borderRadius: "12px", 
+                  backgroundColor: "rgba(99, 102, 241, 0.18)", 
+                  color: "var(--accent-purple)", 
+                  fontWeight: "700" 
+                }}>
+                  OFF BY DEFAULT
+                </span>
+              </div>
+              <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.4" }}>
+                You can now check off IEP milestones, post-meeting compliance steps, and screening tasks directly from your dashboard timeline with automatic Google Drive syncing and a 4-second accidental-click undo guard.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+            <button 
+              type="button" 
+              className="btn btn-primary"
+              style={{ padding: "8px 16px", fontSize: "12px", fontWeight: "700", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              onClick={() => {
+                store.dismissChecklistTeaser(true);
+                pushActivity("Enabled Interactive Dashboard Checklists mode.");
+              }}
+            >
+              <CheckSquare size={14} />
+              Try It Out (Turn On)
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-secondary"
+              style={{ padding: "8px 14px", fontSize: "12px" }}
+              onClick={() => store.dismissChecklistTeaser(false)}
+            >
+              Keep Default (Off)
             </button>
           </div>
         </div>
@@ -720,10 +1360,10 @@ export default function Dashboard({ students, screenings, updateScreening }) {
             <div>
               <h2>
                 {(timelineFilter === "activeWeek" || timelineFilter === "thisWeek")
-                  ? `Due ${selectedWeek === "nextWeek" ? "Next" : "This"} Week (${displayedTimelines.length})`
+                  ? `Due ${selectedWeek === "nextWeek" ? "Next" : "This"} Week (${finalDisplayedTimelines.length})`
                   : timelineFilter === "overdue"
-                  ? `Overdue Timelines (${displayedTimelines.length})`
-                  : `${selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Timeline & Due Summaries`}
+                  ? `Overdue Timelines (${finalDisplayedTimelines.length})`
+                  : `${selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Timeline & Due Summaries (${finalDisplayedTimelines.length})`}
               </h2>
               <p style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
                 {(timelineFilter === "activeWeek" || timelineFilter === "thisWeek")
@@ -748,7 +1388,7 @@ export default function Dashboard({ students, screenings, updateScreening }) {
             )}
           </div>
 
-          <div className="timeline-actions hide-print">
+          <div className="timeline-actions hide-print" style={{ flexWrap: "wrap", alignItems: "center" }}>
             <button 
               className="btn btn-secondary" 
               style={{ padding: "6px 12px", fontSize: "11px", display: "inline-flex", alignItems: "center", gap: "6px", borderColor: showAugustSetup ? "var(--accent-purple)" : "transparent" }}
@@ -773,146 +1413,277 @@ export default function Dashboard({ students, screenings, updateScreening }) {
               <Printer size={12} />
               Print {selectedWeek === "nextWeek" ? "Next Week's" : "Weekly"} Checklist
             </button>
+
+            <button 
+              type="button"
+              className={`btn ${interactiveChecklistMode ? "btn-primary" : "btn-secondary"}`} 
+              style={{ 
+                padding: "6px 12px", 
+                fontSize: "11px", 
+                display: "inline-flex", 
+                alignItems: "center", 
+                gap: "6px",
+                borderColor: interactiveChecklistMode ? "var(--accent-purple)" : "var(--border-color)"
+              }}
+              onClick={() => {
+                store.toggleInteractiveChecklistMode();
+                pushActivity(`${!interactiveChecklistMode ? "Enabled" : "Disabled"} Interactive Checklist Mode.`);
+              }}
+              title={interactiveChecklistMode ? "Checklist mode active - click to return to view-only" : "Turn on interactive checklist mode to check off tasks directly"}
+            >
+              <CheckSquare size={12} />
+              Checklist Mode: {interactiveChecklistMode ? "ON" : "OFF"}
+            </button>
+
+            {interactiveChecklistMode && (
+              <label style={{ 
+                display: "inline-flex", 
+                alignItems: "center", 
+                gap: "6px", 
+                fontSize: "11px", 
+                cursor: "pointer", 
+                color: "var(--text-muted)", 
+                marginLeft: "auto", 
+                userSelect: "none" 
+              }}>
+                <input 
+                  type="checkbox"
+                  checked={showCompleted}
+                  onChange={(e) => setShowCompleted(e.target.checked)}
+                  style={{ accentColor: "var(--accent-purple)", cursor: "pointer", width: "14px", height: "14px" }}
+                />
+                <span>Show Completed Tasks</span>
+              </label>
+            )}
           </div>
 
           <div className="timeline-list">
-            {displayedTimelines.length === 0 ? (
+            {finalDisplayedTimelines.length === 0 ? (
               <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>
                 <CheckCircle size={40} style={{ color: "var(--accent-emerald)", marginBottom: "12px" }} />
                 <p style={{ fontWeight: "600" }}>All clear! No upcoming timelines or overdue reports.</p>
               </div>
             ) : (
-              displayedTimelines.map((timeline, idx) => (
-                <div key={idx} className={`timeline-card ${timeline.status}`}>
-                  <div className="timeline-content">
-                    <div className="timeline-student-info">
-                      <span 
-                        className="timeline-student-name"
-                        onClick={() => handleTimelineClick(timeline)}
-                        title="Go to student workflow"
-                        style={{ 
-                          cursor: "pointer", 
-                          textDecoration: "underline", 
-                          color: "var(--accent-purple)",
-                          fontWeight: "600"
+              finalDisplayedTimelines.map((timeline, idx) => {
+                const taskKey = `${timeline.studentId}-${timeline.type}`;
+                const isCompleted = !!timeline.isCompleted;
+                const isCheckable = isTaskCheckable(timeline);
+                const isRecentlyCompleted = !!timeline.isRecentlyCompleted;
+
+                return (
+                  <div key={`${taskKey}-${idx}`} className={`timeline-card ${timeline.status}`}>
+                    {interactiveChecklistMode && isCheckable && (
+                      <div
+                        className="timeline-card-checkbox"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleTask(timeline);
                         }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "6px",
+                          border: isCompleted 
+                            ? "2px solid var(--accent-emerald)" 
+                            : "2px solid var(--border-color)",
+                          backgroundColor: isCompleted 
+                            ? "var(--accent-emerald)" 
+                            : "var(--bg-primary)",
+                          cursor: "pointer",
+                          marginTop: "2px",
+                          flexShrink: 0,
+                          transition: "all 0.15s ease",
+                          boxShadow: isCompleted ? "0 2px 6px rgba(16, 185, 129, 0.35)" : "none"
+                        }}
+                        title={isCompleted ? "Completed (Click to uncheck)" : `Mark "${timeline.label}" complete`}
                       >
-                        {timeline.studentName}
-                      </span>
-                      <span className={`timeline-date-alert ${timeline.status}`}>
-                        {timeline.daysRemaining === null ? (
-                          "Pending Trigger"
-                        ) : timeline.daysRemaining < 0 ? (
-                          `${Math.abs(timeline.daysRemaining)} Days OVERDUE`
-                        ) : timeline.daysRemaining === 0 ? (
-                          "DUE TODAY"
+                        {isCompleted && <Check size={16} color="#ffffff" strokeWidth={3} />}
+                      </div>
+                    )}
+
+                    <div className="timeline-content">
+                      <div className="timeline-student-info">
+                        <span 
+                          className="timeline-student-name"
+                          onClick={() => handleTimelineClick(timeline)}
+                          title="Go to student workflow"
+                          style={{ 
+                            cursor: "pointer", 
+                            textDecoration: "underline", 
+                            color: "var(--accent-purple)",
+                            fontWeight: "600"
+                          }}
+                        >
+                          {timeline.studentName}
+                        </span>
+                        {isCompleted ? (
+                          <span className="timeline-date-alert on-track" style={{ color: "var(--accent-emerald)", fontWeight: "700" }}>
+                            COMPLETED
+                          </span>
                         ) : (
-                          `${timeline.daysRemaining} Days Left`
+                          <span className={`timeline-date-alert ${timeline.status}`}>
+                            {timeline.daysRemaining === null ? (
+                              "Pending Trigger"
+                            ) : timeline.daysRemaining < 0 ? (
+                              `${Math.abs(timeline.daysRemaining)} Days OVERDUE`
+                            ) : timeline.daysRemaining === 0 ? (
+                              "DUE TODAY"
+                            ) : (
+                              `${timeline.daysRemaining} Days Left`
+                            )}
+                          </span>
                         )}
-                      </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
+                        <span className={`timeline-badge ${timeline.status}`}>{timeline.category}</span>
+                        <span style={{ 
+                          fontSize: "14px", 
+                          fontWeight: "700", 
+                          color: isCompleted ? "var(--text-muted)" : "var(--text-heading)",
+                          textDecoration: isCompleted ? "line-through" : "none"
+                        }}>
+                          {timeline.label}
+                        </span>
+                      </div>
+                      
+                      <p className="timeline-step" style={{ color: isCompleted ? "var(--text-muted)" : "inherit" }}>
+                        {timeline.desc}
+                      </p>
+
+                      <div className="timeline-meta">
+                        <span><Calendar size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} /> Due: {timeline.dueDate || "N/A"}</span>
+                        {timeline.mandatory && !isCompleted && <span style={{ color: "var(--accent-rose)", fontWeight: "600" }}>* Mandatory State Deadline</span>}
+                      </div>
+
+                      {isRecentlyCompleted && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px", flexWrap: "wrap" }}>
+                          <span style={{ 
+                            fontSize: "11px", 
+                            fontWeight: "700", 
+                            color: "var(--accent-emerald)", 
+                            display: "inline-flex", 
+                            alignItems: "center", 
+                            gap: "4px" 
+                          }}>
+                            <CheckCircle size={13} /> Completed! Syncing to Drive...
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ 
+                              padding: "2px 8px", 
+                              fontSize: "11px", 
+                              fontWeight: "700", 
+                              borderColor: "var(--accent-emerald)",
+                              color: "var(--accent-emerald)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              backgroundColor: "rgba(16, 185, 129, 0.08)"
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleUndoTask(taskKey);
+                            }}
+                            title="Undo task completion"
+                          >
+                            <RotateCcw size={11} /> Undo
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
-                      <span className={`timeline-badge ${timeline.status}`}>{timeline.category}</span>
-                      <span style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-heading)" }}>
-                        {timeline.label}
-                      </span>
-                    </div>
-                    
-                    <p className="timeline-step">{timeline.desc}</p>
-
-                    <div className="timeline-meta">
-                      <span><Calendar size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} /> Due: {timeline.dueDate || "N/A"}</span>
-                      {timeline.mandatory && <span style={{ color: "var(--accent-rose)", fontWeight: "600" }}>* Mandatory State Deadline</span>}
+                    {/* Contextual Action Buttons */}
+                    <div style={{ alignSelf: "center", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {!isCompleted && timeline.type === "IEP Finalization" && (
+                        <button 
+                          className="nudge-btn"
+                          style={{ backgroundColor: "var(--accent-emerald)" }}
+                          onClick={() => {
+                            store.updateStudent(timeline.studentId, { iepFinalizedDate: getTodayISO() });
+                            pushActivity(`Finalized IEP on TN Pulse for ${timeline.studentName}.`);
+                          }}
+                          title="Mark IEP finalized today"
+                        >
+                          <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          Finalize Today
+                        </button>
+                      )}
+                      {!isCompleted && timeline.type === "IEP Print Glance" && (
+                        <button 
+                          className="nudge-btn"
+                          style={{ backgroundColor: "var(--accent-purple)" }}
+                          onClick={() => {
+                            store.updateStudent(timeline.studentId, { iepAtAGlancePrinted: true });
+                            pushActivity(`Marked IEP At-A-Glance printed for ${timeline.studentName}.`);
+                          }}
+                          title="Mark At-A-Glance printed"
+                        >
+                          <Printer size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          Mark Printed
+                        </button>
+                      )}
+                      {!isCompleted && timeline.type === "IEP Friday Signatures" && (
+                        <button 
+                          className="nudge-btn"
+                          style={{ backgroundColor: "var(--accent-purple)" }}
+                          onClick={() => {
+                            store.updateStudent(timeline.studentId, { iepAtAGlanceSignaturesCompleted: true });
+                            pushActivity(`Collected At-A-Glance teacher signatures for ${timeline.studentName}.`);
+                          }}
+                          title="Mark teacher signatures collected"
+                        >
+                          <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          Signatures Done
+                        </button>
+                      )}
+                      {!isCompleted && timeline.type === "IEP SPED File" && (
+                        <button 
+                          className="nudge-btn"
+                          style={{ backgroundColor: "var(--accent-emerald)" }}
+                          onClick={() => {
+                            store.updateStudent(timeline.studentId, { iepPhysicalFileCompleted: true });
+                            pushActivity(`Archived physical SPED folder for ${timeline.studentName}.`);
+                          }}
+                          title="Mark physical SPED folder updated"
+                        >
+                          <FileCheck size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          File Updated
+                        </button>
+                      )}
+                      {!isCompleted && timeline.actionNeeded === "Nudge Teacher" && (
+                        <button 
+                          className="nudge-btn"
+                          onClick={() => {
+                            const screening = screenings.find(s => s.name === timeline.studentName);
+                            if (screening) handleNudge(screening);
+                          }}
+                        >
+                          <Send size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          Nudge ELA/Math
+                        </button>
+                      )}
+                      {!isCompleted && timeline.actionNeeded === "Follow Up Invite" && (
+                        <button 
+                          className="nudge-btn"
+                          style={{ backgroundColor: "var(--accent-purple)" }}
+                          onClick={() => {
+                            const student = students.find(s => s.id === timeline.studentId);
+                            if (student) handleFollowUpInvitation(student);
+                          }}
+                        >
+                          <Send size={10} style={{ display: "inline", marginRight: "4px" }} />
+                          Email Follow-up
+                        </button>
+                      )}
                     </div>
                   </div>
-
-                  {/* Contextual Action Buttons */}
-                  <div style={{ alignSelf: "center", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    {timeline.type === "IEP Finalization" && (
-                      <button 
-                        className="nudge-btn"
-                        style={{ backgroundColor: "var(--accent-emerald)" }}
-                        onClick={() => {
-                          store.updateStudent(timeline.studentId, { iepFinalizedDate: getTodayISO() });
-                          pushActivity(`Finalized IEP on TN Pulse for ${timeline.studentName}.`);
-                        }}
-                        title="Mark IEP finalized today"
-                      >
-                        <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        Finalize Today
-                      </button>
-                    )}
-                    {timeline.type === "IEP Print Glance" && (
-                      <button 
-                        className="nudge-btn"
-                        style={{ backgroundColor: "var(--accent-purple)" }}
-                        onClick={() => {
-                          store.updateStudent(timeline.studentId, { iepAtAGlancePrinted: true });
-                          pushActivity(`Marked IEP At-A-Glance printed for ${timeline.studentName}.`);
-                        }}
-                        title="Mark At-A-Glance printed"
-                      >
-                        <Printer size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        Mark Printed
-                      </button>
-                    )}
-                    {timeline.type === "IEP Friday Signatures" && (
-                      <button 
-                        className="nudge-btn"
-                        style={{ backgroundColor: "var(--accent-purple)" }}
-                        onClick={() => {
-                          store.updateStudent(timeline.studentId, { iepAtAGlanceSignaturesCompleted: true });
-                          pushActivity(`Collected At-A-Glance teacher signatures for ${timeline.studentName}.`);
-                        }}
-                        title="Mark teacher signatures collected"
-                      >
-                        <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        Signatures Done
-                      </button>
-                    )}
-                    {timeline.type === "IEP SPED File" && (
-                      <button 
-                        className="nudge-btn"
-                        style={{ backgroundColor: "var(--accent-emerald)" }}
-                        onClick={() => {
-                          store.updateStudent(timeline.studentId, { iepPhysicalFileCompleted: true });
-                          pushActivity(`Archived physical SPED folder for ${timeline.studentName}.`);
-                        }}
-                        title="Mark physical SPED folder updated"
-                      >
-                        <FileCheck size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        File Updated
-                      </button>
-                    )}
-                    {timeline.actionNeeded === "Nudge Teacher" && (
-                      <button 
-                        className="nudge-btn"
-                        onClick={() => {
-                          const screening = screenings.find(s => s.name === timeline.studentName);
-                          if (screening) handleNudge(screening);
-                        }}
-                      >
-                        <Send size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        Nudge ELA/Math
-                      </button>
-                    )}
-                    {timeline.actionNeeded === "Follow Up Invite" && (
-                      <button 
-                        className="nudge-btn"
-                        style={{ backgroundColor: "var(--accent-purple)" }}
-                        onClick={() => {
-                          const student = students.find(s => s.id === timeline.studentId);
-                          if (student) handleFollowUpInvitation(student);
-                        }}
-                      >
-                        <Send size={10} style={{ display: "inline", marginRight: "4px" }} />
-                        Email Follow-up
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

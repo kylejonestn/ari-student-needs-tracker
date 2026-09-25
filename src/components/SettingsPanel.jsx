@@ -202,7 +202,8 @@ export default function SettingsPanel({
   holidays,
   workEmail,
   saveToBrowser,
-  pendingLocalSync
+  pendingLocalSync,
+  interactiveChecklistMode
 }) {
   const [tempClientId, setTempClientId] = useState(clientId);
   const [showSavedMsg, setShowSavedMsg] = useState(false);
@@ -629,6 +630,59 @@ export default function SettingsPanel({
                     type="checkbox"
                     checked={!!saveToBrowser}
                     onChange={(e) => handleToggleSaveToBrowser(e.target.checked)}
+                    style={{ 
+                      cursor: "pointer", 
+                      width: "18px", 
+                      height: "18px", 
+                      accentColor: "var(--accent-purple)",
+                      marginTop: "2px",
+                      flexShrink: 0
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Interactive Dashboard Checklists */}
+              <div style={{ 
+                marginTop: "16px",
+                padding: "16px", 
+                borderRadius: "var(--radius-md)", 
+                backgroundColor: "var(--bg-primary)",
+                border: "1px solid var(--border-color)",
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "10px" 
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
+                  <div>
+                    <label 
+                      htmlFor="interactiveChecklistToggle" 
+                      style={{ 
+                        fontWeight: "600", 
+                        fontSize: "13px", 
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        color: "var(--text-heading)"
+                      }}
+                    >
+                      <span>Interactive Dashboard Checklists</span>
+                      {interactiveChecklistMode ? (
+                        <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(16, 185, 129, 0.15)", color: "var(--accent-emerald)", fontWeight: "700" }}>ENABLED</span>
+                      ) : (
+                        <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(100, 116, 139, 0.15)", color: "var(--text-muted)", fontWeight: "600" }}>DEFAULT: OFF</span>
+                      )}
+                    </label>
+                    <p style={{ fontSize: "11.5px", color: "var(--text-muted)", margin: "4px 0 0 0", lineHeight: "1.45" }}>
+                      Enables satisfying quick-action checkboxes directly on the main Dashboard timeline cards to mark IEP draftings, survey collections, meeting finalizations, and screening tasks complete. Includes an accidental-click 4-second undo guard and seamless Google Drive cloud sync.
+                    </p>
+                  </div>
+                  <input
+                    id="interactiveChecklistToggle"
+                    type="checkbox"
+                    checked={!!interactiveChecklistMode}
+                    onChange={(e) => store.toggleInteractiveChecklistMode(e.target.checked)}
                     style={{ 
                       cursor: "pointer", 
                       width: "18px", 

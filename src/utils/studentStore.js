@@ -834,6 +834,8 @@ export class StudentStore {
     
     // Load local cache / offline mode setting
     const savedSaveToBrowser = getStorageItem("aegis_save_to_browser") === "true";
+    const savedInteractiveChecklistMode = getStorageItem("aegis_interactive_checklist_mode") === "true";
+    const savedSeenChecklistTeaser = getStorageItem("aegis_seen_checklist_teaser") === "true";
     let cachedStudents = null;
     let cachedScreenings = null;
     let hasLocalCache = false;
@@ -941,6 +943,8 @@ export class StudentStore {
       activeTab: "dashboard",
       isParentMode: false,
       flashingGreen: false,
+      interactiveChecklistMode: savedInteractiveChecklistMode,
+      seenChecklistTeaser: savedSeenChecklistTeaser,
 
       // Deep linking states
       selectedScreeningId: null,
@@ -1073,6 +1077,12 @@ export class StudentStore {
         if (newState.saveToBrowser !== undefined) {
           localStorage.setItem("aegis_save_to_browser", newState.saveToBrowser ? "true" : "false");
         }
+        if (newState.interactiveChecklistMode !== undefined) {
+          localStorage.setItem("aegis_interactive_checklist_mode", newState.interactiveChecklistMode ? "true" : "false");
+        }
+        if (newState.seenChecklistTeaser !== undefined) {
+          localStorage.setItem("aegis_seen_checklist_teaser", newState.seenChecklistTeaser ? "true" : "false");
+        }
         
         // Save database cache in localStorage only if Save to Browser (Offline Mode) is enabled
         // OR if there is a pending local sync that has not yet been verified & uploaded to Google Drive.
@@ -1097,6 +1107,19 @@ export class StudentStore {
       document.documentElement.setAttribute("data-theme", theme);
     }
     this.updateState({ theme });
+  }
+
+  toggleInteractiveChecklistMode(enable) {
+    const nextVal = typeof enable === "boolean" ? enable : !this.state.interactiveChecklistMode;
+    this.updateState({ interactiveChecklistMode: nextVal });
+  }
+
+  dismissChecklistTeaser(enableFeature = false) {
+    const updates = { seenChecklistTeaser: true };
+    if (enableFeature) {
+      updates.interactiveChecklistMode = true;
+    }
+    this.updateState(updates);
   }
 
   // Google OAuth Log In

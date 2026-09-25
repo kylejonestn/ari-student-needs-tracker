@@ -450,6 +450,7 @@ button, input, select, textarea {
 .timeline-card.on-track { border-left-color: var(--accent-emerald); }
 .timeline-card.warning { border-left-color: var(--accent-amber); }
 .timeline-card.overdue { border-left-color: var(--accent-rose); }
+.timeline-card.completed { border-left-color: var(--accent-emerald); background: rgba(16, 185, 129, 0.04); }
 
 .timeline-badge {
   font-size: 11px;
@@ -462,6 +463,7 @@ button, input, select, textarea {
 .timeline-badge.on-track { background: var(--accent-emerald-light); color: var(--accent-emerald); }
 .timeline-badge.warning { background: var(--accent-amber-light); color: var(--accent-amber); }
 .timeline-badge.overdue { background: var(--accent-rose-light); color: var(--accent-rose); }
+.timeline-badge.completed { background: var(--accent-emerald-light); color: var(--accent-emerald); }
 
 .timeline-content {
   flex-grow: 1;
