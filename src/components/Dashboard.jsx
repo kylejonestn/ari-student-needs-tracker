@@ -31,7 +31,8 @@ import {
   Info,
   Check,
   RotateCcw,
-  X
+  X,
+  ArrowUpRight
 } from "lucide-react";
 
 export default function Dashboard({ 
@@ -1541,14 +1542,9 @@ export default function Dashboard({
                           className="timeline-student-name"
                           onClick={() => handleTimelineClick(timeline)}
                           title="Go to student workflow"
-                          style={{ 
-                            cursor: "pointer", 
-                            textDecoration: "underline", 
-                            color: "var(--accent-purple)",
-                            fontWeight: "600"
-                          }}
                         >
                           {timeline.studentName}
+                          <ArrowUpRight size={13} className="timeline-student-link-icon" />
                         </span>
                         {isTaskChecked ? (
                           <span className="timeline-date-alert on-track" style={{ color: "var(--accent-emerald)", fontWeight: "700" }}>
@@ -1761,11 +1757,12 @@ export default function Dashboard({
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "700", marginBottom: "8px" }}>
                       <span 
-                        style={{ cursor: "pointer", textDecoration: "underline", color: "var(--accent-purple)" }}
+                        className="timeline-student-name"
                         onClick={() => handleTimelineClick({ studentId: student.id, type: "IEP At-A-Glance", category: "Active" })}
                         title="Open in IEP Planner"
                       >
                         {student.name} ({student.grade})
+                        <ArrowUpRight size={13} className="timeline-student-link-icon" />
                       </span>
                       {isFinalized ? (
                         <span style={{ 

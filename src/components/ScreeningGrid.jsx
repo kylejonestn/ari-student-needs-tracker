@@ -79,6 +79,7 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
       const globalId = store.getState().selectedScreeningId;
       const globalStep = store.getState().selectedScreeningStepIndex;
       if (globalId) {
+        setViewMode("timeline");
         setSelectedScreenId(globalId);
         setExpandedStudentId(globalId);
         if (globalStep !== undefined && globalStep !== null) {
@@ -89,6 +90,20 @@ export default function ScreeningGrid({ screenings, addScreening, updateScreenin
         }
         // Reset global store selection to prevent locking focus
         store.updateState({ selectedScreeningId: null, selectedScreeningStepIndex: null });
+
+        // Smoothly scroll and highlight the target student card
+        const targetId = globalId;
+        const tryScroll = (attempts = 0) => {
+          const el = document.getElementById(`screening-card-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("target-card-highlight");
+            setTimeout(() => el.classList.remove("target-card-highlight"), 2500);
+          } else if (attempts < 8) {
+            setTimeout(() => tryScroll(attempts + 1), 75);
+          }
+        };
+        setTimeout(() => tryScroll(0), 100);
       }
     };
     
@@ -1478,6 +1493,7 @@ const meet = new Date(activeScreening.meetingDate + "T00:00:00");
             return (
               <div 
                 key={student.id} 
+                id={`screening-card-${student.id}`}
                 className="timeline-card-glass" 
                 style={{ 
                   borderLeft: student.status === "Pending Discontinuation" 

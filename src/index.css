@@ -512,14 +512,62 @@ button, input, select, textarea {
 
 .timeline-student-info {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  line-height: 1.25;
 }
 
 .timeline-student-name {
-  font-weight: 600;
-  color: var(--text-heading);
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--accent-purple);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  text-decoration: underline;
+  text-decoration-color: rgba(168, 85, 247, 0.35);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: all 0.15s ease;
+}
+
+.timeline-student-name:hover {
+  color: var(--accent-purple-light);
+  text-decoration-color: var(--accent-purple);
+}
+
+.timeline-student-link-icon {
+  opacity: 0.6;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.timeline-student-name:hover .timeline-student-link-icon {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+@keyframes target-card-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7), 0 8px 24px rgba(168, 85, 247, 0.25);
+    border-color: var(--accent-purple) !important;
+  }
+  40% {
+    box-shadow: 0 0 0 6px rgba(168, 85, 247, 0.35), 0 12px 28px rgba(168, 85, 247, 0.3);
+    border-color: var(--accent-purple-light) !important;
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+
+.target-card-highlight {
+  animation: target-card-pulse 2.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  position: relative;
+  z-index: 10;
 }
 
 .timeline-date-alert {
@@ -1007,6 +1055,12 @@ button, input, select, textarea {
   .timeline-student-name {
     font-size: 14pt !important;
     font-weight: bold;
+    color: black !important;
+    text-decoration: none !important;
+  }
+
+  .timeline-student-link-icon {
+    display: none !important;
   }
 
   .timeline-badge {

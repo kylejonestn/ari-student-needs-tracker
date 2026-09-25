@@ -249,6 +249,20 @@ export default function IepPlanner({ students = [], updateStudent }) {
         }
         // Clear deep-link keys to avoid locked focus states
         store.updateState({ selectedIepStudentId: null, selectedIepStepIndex: null, selectedReevalStudentId: null });
+
+        // Smoothly scroll and highlight the target student card
+        const targetId = globalStudentId;
+        const tryScroll = (attempts = 0) => {
+          const el = document.getElementById(`iep-card-${targetId}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.classList.add("target-card-highlight");
+            setTimeout(() => el.classList.remove("target-card-highlight"), 2500);
+          } else if (attempts < 8) {
+            setTimeout(() => tryScroll(attempts + 1), 75);
+          }
+        };
+        setTimeout(() => tryScroll(0), 100);
       }
     };
     
@@ -1382,6 +1396,7 @@ export default function IepPlanner({ students = [], updateStudent }) {
           return (
             <div 
               key={student.id} 
+              id={`iep-card-${student.id}`}
               className="timeline-card-glass" 
               style={{ 
                 borderLeft: currentStageIndex >= currentStages.length
