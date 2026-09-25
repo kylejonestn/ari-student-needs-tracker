@@ -2,7 +2,7 @@
    Aegis Gifted Tracker - Dashboard Component
    ========================================== */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   store,
   calculateTimelines, 
@@ -46,6 +46,8 @@ export default function Dashboard({
 
   const [recentlyCompleted, setRecentlyCompleted] = useState({});
   const [showCompleted, setShowCompleted] = useState(false);
+  const [animatingTasks, setAnimatingTasks] = useState({});
+  const collapseTimersRef = useRef({});
 
   const [activityLog, setActivityLog] = useState([
     { id: 1, time: "10:30 AM", msg: "Automated email summary of weekly deadlines generated for Ariel." },
@@ -56,11 +58,11 @@ export default function Dashboard({
   const [selectedWeek, setSelectedWeek] = useState("thisWeek"); // "thisWeek" | "nextWeek"
   const [timelineFilter, setTimelineFilter] = useState("all"); // "all", "activeWeek", "overdue"
 
-  // Clean up any unexpired undo timers on unmount
+  // Clean up any unexpired undo timers and collapse animation timers on unmount
   useEffect(() => {
     return () => {
-      Object.values(recentlyCompleted).forEach(entry => {
-        if (entry?.timerId) clearTimeout(entry.timerId);
+      Object.values(collapseTimersRef.current).forEach(timer => {
+        if (timer) clearTimeout(timer);
       });
     };
   }, []);
@@ -741,8 +743,8 @@ export default function Dashboard({
   const handleToggleTask = (t) => {
     const taskKey = `${t.studentId}-${t.type}`;
 
-    // If it was recently completed, toggling it means undoing
-    if (recentlyCompleted[taskKey]) {
+    // If currently animating or recently completed, clicking again cancels/undoes immediately
+    if (animatingTasks[taskKey] || recentlyCompleted[taskKey]) {
       handleUndoTask(taskKey);
       return;
     }
@@ -754,7 +756,7 @@ export default function Dashboard({
     const diff = getTaskCompletionDiff(t, studentOrScreening);
     if (!diff) return;
 
-    // If it was already completed (e.g. from historical completed list), uncheck it
+    // If already completed (e.g. from historical completed list), uncheck it
     if (t.isCompleted) {
       if (t.category === "Active") {
         store.updateStudent(t.studentId, diff.undoValues);
@@ -765,7 +767,10 @@ export default function Dashboard({
       return;
     }
 
-    // Mark task completed
+    // Step 1: Immediately mark as "checked" so checkmark displays with pop animation
+    setAnimatingTasks(prev => ({ ...prev, [taskKey]: "checked" }));
+
+    // Apply store update
     if (t.category === "Active") {
       store.updateStudent(t.studentId, diff.updates);
     } else {
@@ -773,64 +778,80 @@ export default function Dashboard({
     }
     pushActivity(`Completed "${t.label}" for ${t.studentName}.`);
 
-    // Start 4-second undo grace window
-    const timerId = setTimeout(() => {
-      setRecentlyCompleted(prev => {
-        const next = { ...prev };
-        delete next[taskKey];
-        return next;
-      });
-    }, 4000);
-
+    // Record in recentlyCompleted for undo tracking
     setRecentlyCompleted(prev => ({
       ...prev,
       [taskKey]: {
         timeline: t,
         undoValues: diff.undoValues,
-        timerId,
-        expiresAt: Date.now() + 4000
+        completedAt: Date.now()
       }
     }));
+
+    // If not showing completed tasks, trigger smooth collapse after 800ms checkmark appreciation delay
+    if (!showCompleted) {
+      const collapseTimer = setTimeout(() => {
+        setAnimatingTasks(prev => ({ ...prev, [taskKey]: "collapsing" }));
+
+        const removeTimer = setTimeout(() => {
+          setAnimatingTasks(prev => ({ ...prev, [taskKey]: "collapsed" }));
+        }, 450);
+
+        collapseTimersRef.current[`${taskKey}-remove`] = removeTimer;
+      }, 800);
+
+      collapseTimersRef.current[`${taskKey}-collapse`] = collapseTimer;
+    }
   };
 
-  // Instant Undo handler during 4-second grace period
+  // Instant Undo handler during check and grace period
   const handleUndoTask = (taskKey) => {
+    // Clear any pending collapse timers
+    if (collapseTimersRef.current[`${taskKey}-collapse`]) {
+      clearTimeout(collapseTimersRef.current[`${taskKey}-collapse`]);
+      delete collapseTimersRef.current[`${taskKey}-collapse`];
+    }
+    if (collapseTimersRef.current[`${taskKey}-remove`]) {
+      clearTimeout(collapseTimersRef.current[`${taskKey}-remove`]);
+      delete collapseTimersRef.current[`${taskKey}-remove`];
+    }
+
     const entry = recentlyCompleted[taskKey];
-    if (!entry) return;
-
-    if (entry.timerId) {
-      clearTimeout(entry.timerId);
+    if (entry) {
+      const t = entry.timeline;
+      if (t.category === "Active") {
+        store.updateStudent(t.studentId, entry.undoValues);
+      } else {
+        store.updateScreening(t.studentId, entry.undoValues);
+      }
+      pushActivity(`Undid completion of "${t.label}" for ${t.studentName}.`);
     }
 
-    const t = entry.timeline;
-    if (t.category === "Active") {
-      store.updateStudent(t.studentId, entry.undoValues);
-    } else {
-      store.updateScreening(t.studentId, entry.undoValues);
-    }
+    setAnimatingTasks(prev => {
+      const next = { ...prev };
+      delete next[taskKey];
+      return next;
+    });
 
     setRecentlyCompleted(prev => {
       const next = { ...prev };
       delete next[taskKey];
       return next;
     });
-
-    pushActivity(`Undid completion of "${t.label}" for ${t.studentName}.`);
   };
 
-  // Active recently completed items (currently in 4-second undo grace period)
+  // Active recently completed or animating items
   const activeRecentlyCompleted = Object.values(recentlyCompleted).map(entry => ({
     ...entry.timeline,
     status: "completed",
     isCompleted: true,
-    isRecentlyCompleted: true,
-    undoExpiresAt: entry.expiresAt
+    isRecentlyCompleted: true
   }));
 
   // Historical completed items if showCompleted is checked
   const historicalCompleted = showCompleted ? getHistoricalCompletedTasks() : [];
 
-  // Final displayed timelines combining active items, recently completed items, and completed items
+  // Final displayed timelines: preserve stable sort by daysRemaining so cards NEVER jump
   const finalDisplayedTimelines = [
     ...displayedTimelines,
     ...activeRecentlyCompleted.filter(rc => !displayedTimelines.some(d => `${d.studentId}-${d.type}` === `${rc.studentId}-${rc.type}`)),
@@ -838,9 +859,14 @@ export default function Dashboard({
       !displayedTimelines.some(d => `${d.studentId}-${d.type}` === `${hc.studentId}-${hc.type}`) &&
       !activeRecentlyCompleted.some(rc => `${rc.studentId}-${rc.type}` === `${hc.studentId}-${hc.type}`)
     )
-  ].sort((a, b) => {
-    if (a.isCompleted && !b.isCompleted) return 1;
-    if (!a.isCompleted && b.isCompleted) return -1;
+  ].filter(t => {
+    const key = `${t.studentId}-${t.type}`;
+    // If not showing completed tasks, filter out tasks that have finished their collapse animation
+    if (!showCompleted && animatingTasks[key] === "collapsed") {
+      return false;
+    }
+    return true;
+  }).sort((a, b) => {
     return (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining);
   });
 
@@ -1469,9 +1495,14 @@ export default function Dashboard({
                 const isCompleted = !!timeline.isCompleted;
                 const isCheckable = isTaskCheckable(timeline);
                 const isRecentlyCompleted = !!timeline.isRecentlyCompleted;
+                const animState = animatingTasks[taskKey];
+                const isTaskChecked = isCompleted || animState === "checked" || animState === "collapsing";
 
                 return (
-                  <div key={`${taskKey}-${idx}`} className={`timeline-card ${timeline.status}`}>
+                  <div 
+                    key={`${taskKey}-${idx}`} 
+                    className={`timeline-card ${timeline.status} ${animState === "checked" ? "task-just-checked" : ""} ${animState === "collapsing" ? "task-collapsing" : ""}`}
+                  >
                     {interactiveChecklistMode && isCheckable && (
                       <div
                         className="timeline-card-checkbox"
@@ -1486,21 +1517,21 @@ export default function Dashboard({
                           width: "24px",
                           height: "24px",
                           borderRadius: "6px",
-                          border: isCompleted 
+                          border: isTaskChecked 
                             ? "2px solid var(--accent-emerald)" 
                             : "2px solid var(--border-color)",
-                          backgroundColor: isCompleted 
+                          backgroundColor: isTaskChecked 
                             ? "var(--accent-emerald)" 
                             : "var(--bg-primary)",
                           cursor: "pointer",
                           marginTop: "2px",
                           flexShrink: 0,
                           transition: "all 0.15s ease",
-                          boxShadow: isCompleted ? "0 2px 6px rgba(16, 185, 129, 0.35)" : "none"
+                          boxShadow: isTaskChecked ? "0 2px 8px rgba(16, 185, 129, 0.4)" : "none"
                         }}
-                        title={isCompleted ? "Completed (Click to uncheck)" : `Mark "${timeline.label}" complete`}
+                        title={isTaskChecked ? "Completed (Click to uncheck)" : `Mark "${timeline.label}" complete`}
                       >
-                        {isCompleted && <Check size={16} color="#ffffff" strokeWidth={3} />}
+                        {isTaskChecked && <Check size={16} color="#ffffff" strokeWidth={3} className="checkmark-pop-icon" />}
                       </div>
                     )}
 
@@ -1519,7 +1550,7 @@ export default function Dashboard({
                         >
                           {timeline.studentName}
                         </span>
-                        {isCompleted ? (
+                        {isTaskChecked ? (
                           <span className="timeline-date-alert on-track" style={{ color: "var(--accent-emerald)", fontWeight: "700" }}>
                             COMPLETED
                           </span>
@@ -1543,11 +1574,16 @@ export default function Dashboard({
                         <span style={{ 
                           fontSize: "14px", 
                           fontWeight: "700", 
-                          color: isCompleted ? "var(--text-muted)" : "var(--text-heading)",
-                          textDecoration: isCompleted ? "line-through" : "none"
+                          color: isTaskChecked ? "var(--text-muted)" : "var(--text-heading)",
+                          textDecoration: isTaskChecked ? "line-through" : "none"
                         }}>
                           {timeline.label}
                         </span>
+                        {animState === "checked" && (
+                          <span style={{ fontSize: "11px", fontWeight: "700", color: "var(--accent-emerald)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <CheckCircle size={12} className="checkmark-pop-icon" /> Done!
+                          </span>
+                        )}
                       </div>
                       
                       <p className="timeline-step" style={{ color: isCompleted ? "var(--text-muted)" : "inherit" }}>

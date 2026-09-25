@@ -444,13 +444,54 @@ button, input, select, textarea {
   border-bottom: 1px solid var(--border-glass);
   background: var(--bg-card);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: var(--transition-fast);
+  max-height: 500px;
+  box-sizing: border-box;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, max-height 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s ease, margin 0.45s cubic-bezier(0.4, 0, 0.2, 1), padding 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s ease;
 }
 
 .timeline-card.on-track { border-left-color: var(--accent-emerald); }
 .timeline-card.warning { border-left-color: var(--accent-amber); }
 .timeline-card.overdue { border-left-color: var(--accent-rose); }
 .timeline-card.completed { border-left-color: var(--accent-emerald); background: rgba(16, 185, 129, 0.04); }
+
+.timeline-card.task-just-checked {
+  border-left-color: var(--accent-emerald) !important;
+  background-color: rgba(16, 185, 129, 0.08) !important;
+  box-shadow: 0 2px 14px rgba(16, 185, 129, 0.25) !important;
+}
+
+.timeline-card.task-collapsing {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  transform: translateY(-8px) scale(0.97) !important;
+  margin-top: -8px !important;
+  margin-bottom: -8px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+@keyframes checkmark-pop {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.checkmark-pop-icon {
+  animation: checkmark-pop 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
 
 .timeline-badge {
   font-size: 11px;
