@@ -17,6 +17,8 @@ A specialized, state-compliant tracking and caseload management web application 
   * Dual planning windows: toggle between **This Week** and **Next Week** to preview upcoming deadlines.
   * Interactive action buttons directly on dashboard cards to mark items finished (Finalize Today, Mark Printed, Signatures Done, File Updated).
   * Dedicated **Post-Meeting Follow-Up & Filing Tracker** panel with real-time checkboxes, due date badges, and batch completion.
+  * **Deep-Link Navigation & Smooth Anchor Jump**: Clicking any student name on Dashboard cards navigates directly to their workflow (IEP Caseload Timeline or Screening Pipeline), auto-expands the student accordion, smoothly scrolls the card into viewport center (`block: "center"`), and highlights it with a temporary focus pulse.
+  * **Interactive Checklist Mode**: Optional toggleable checklist mode directly on Dashboard cards with checkmark pop animations, smooth card collapse transitions, and a 4-second undo grace period.
 * **Student Directory & Caseload Management**:
   * Sort and filter by Grade, IEP Due Date, Classroom Teacher, and status.
   * Multi-selection action mode (bulk teacher update, bulk calendar dates, soft deletes).
