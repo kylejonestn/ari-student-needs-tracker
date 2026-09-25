@@ -577,9 +577,10 @@ export const calculateTimelines = (student, isScreening = false) => {
     }
 
     // Post-Meeting Tasks
-    if (effectiveMeetingDate && getDaysRemaining(effectiveMeetingDate) <= 0 && !student.iepPhysicalFileCompleted) {
+    const hasMeetingOrFinalized = effectiveMeetingDate || student.iepFinalizedDate;
+    if (hasMeetingOrFinalized && !student.iepPhysicalFileCompleted) {
       // 1. Finalize IEP (On the day of the meeting)
-      if (!student.iepFinalizedDate) {
+      if (!student.iepFinalizedDate && effectiveMeetingDate) {
         const finDue = effectiveMeetingDate;
         const finDays = getDaysRemaining(finDue);
         timelines.push({
@@ -588,7 +589,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           desc: "Submit and lock finalized IEP document on the day of the meeting.",
           dueDate: finDue,
           daysRemaining: finDays,
-          status: finDays < 0 ? "overdue" : "warning",
+          status: finDays < 0 ? "overdue" : finDays <= 1 ? "warning" : "on-track",
           mandatory: true
         });
       }
@@ -605,7 +606,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           desc: "Generate and print 1-page teacher summary report (1 day post-finalize).",
           dueDate: glanceDue,
           daysRemaining: glanceDays,
-          status: glanceDays < 0 ? "overdue" : "warning",
+          status: glanceDays < 0 ? "overdue" : glanceDays <= 1 ? "warning" : "on-track",
           mandatory: false,
           actionNeeded: "Print Glance"
         });
@@ -618,7 +619,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           desc: "Collect signature checklist from classroom teachers (1 day post-finalize).",
           dueDate: glanceDue,
           daysRemaining: glanceDays,
-          status: glanceDays < 0 ? "overdue" : "warning",
+          status: glanceDays < 0 ? "overdue" : glanceDays <= 1 ? "warning" : "on-track",
           mandatory: false
         });
       }
@@ -627,13 +628,19 @@ export const calculateTimelines = (student, isScreening = false) => {
       const uploadDue = addDays(finalizeBase, deadlines.iepPulseAndPwn || 2);
       const uploadDays = getDaysRemaining(uploadDue);
       if (!student.iepPulseUploadCompleted || !student.iepPwnWritten || !student.iepFinalCopySentParent) {
+        const pendingUploadItems = [];
+        if (!student.iepPulseUploadCompleted) pendingUploadItems.push("Pulse Upload");
+        if (!student.iepPwnWritten) pendingUploadItems.push("PWN");
+        if (!student.iepFinalCopySentParent) pendingUploadItems.push("Parent Copy");
+        if (!student.iepSharePointUploadCompleted) pendingUploadItems.push("SharePoint");
+
         timelines.push({
           type: "IEP Pulse & PWN",
           label: "Uploads, PWN & Parent Copy",
-          desc: "Upload signed IEP to Pulse, write PWN, and send final copy to parent (2 days post-finalize).",
+          desc: `Pending: ${pendingUploadItems.join(", ")} (2 days post-finalize).`,
           dueDate: uploadDue,
           daysRemaining: uploadDays,
-          status: uploadDays < 0 ? "overdue" : "warning",
+          status: uploadDays < 0 ? "overdue" : uploadDays <= 1 ? "warning" : "on-track",
           mandatory: true
         });
       }
@@ -648,7 +655,7 @@ export const calculateTimelines = (student, isScreening = false) => {
           desc: "Archive physical paperwork and update student SPED folder (4 days post-finalize).",
           dueDate: spedDue,
           daysRemaining: spedDays,
-          status: spedDays < 0 ? "overdue" : "warning",
+          status: spedDays < 0 ? "overdue" : spedDays <= 1 ? "warning" : "on-track",
           mandatory: false
         });
       }

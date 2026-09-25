@@ -7,7 +7,10 @@ import {
   store,
   calculateTimelines, 
   getDaysRemaining,
-  guessTeacherEmail
+  guessTeacherEmail,
+  addDays,
+  getTodayISO,
+  DEFAULT_DEADLINES
 } from "../utils/studentStore";
 import { 
   Users, 
@@ -278,9 +281,9 @@ export default function Dashboard({ students, screenings, updateScreening }) {
       : defaultWeeklyTimelines
   ).sort((a, b) => (a.daysRemaining === null ? 999 : a.daysRemaining) - (b.daysRemaining === null ? 999 : b.daysRemaining));
 
-  // Friday bulk signatures checklist students
-  const fridaySignatureStudents = students.filter(
-    s => !s.deleted && s.status === "Active" && s.iepFinalizedDate && !s.iepAtAGlanceSignaturesCompleted
+  // Students with active post-meeting / finalize tasks pending
+  const postMeetingStudents = students.filter(
+    s => !s.deleted && s.status === "Active" && (s.iepMeetingDate || s.iepFinalizedDate) && !s.iepPhysicalFileCompleted
   );
 
   const pushActivity = (msg) => {
@@ -342,23 +345,24 @@ export default function Dashboard({ students, screenings, updateScreening }) {
     alert(`August setup concluded for ${student.name}! Scheduled IEP Meeting Date set.`);
   };
 
-  // Mark all Friday signature tasks complete for a student
-  const handleFinalizeFridaySignatures = (studentId) => {
+  // Mark all post-meeting tasks complete for a student
+  const handleFinalizePostMeetingTasks = (studentId) => {
     const student = students.find(s => s.id === studentId);
     if (!student) return;
 
     store.updateStudent(studentId, {
+      iepFinalizedDate: student.iepFinalizedDate || student.iepMeetingDate || getTodayISO(),
+      iepAtAGlancePrinted: true,
       iepAtAGlanceSignaturesCompleted: true,
       iepPulseUploadCompleted: true,
       iepPwnWritten: true,
       iepFinalCopySentParent: true,
       iepSharePointUploadCompleted: true,
-      iepPhysicalFileCompleted: true,
-      iepMeetingDate: "" // Clear meeting date since workflow concluded
+      iepPhysicalFileCompleted: true
     });
 
-    pushActivity(`Concluded Friday Bulk Signatures & SPED File updates for ${student.name}.`);
-    alert(`IEP at a Glance signatures, PWN, uploads & physical SPED file checked off for ${student.name}!`);
+    pushActivity(`Concluded all post-meeting filing & SPED File updates for ${student.name}.`);
+    alert(`All post-meeting tasks (Glance, Signatures, Pulse, PWN, Parent Copy, SPED File) marked complete for ${student.name}!`);
   };
 
   const storeState = store.getState();
@@ -824,7 +828,63 @@ export default function Dashboard({ students, screenings, updateScreening }) {
                   </div>
 
                   {/* Contextual Action Buttons */}
-                  <div style={{ alignSelf: "center" }}>
+                  <div style={{ alignSelf: "center", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {timeline.type === "IEP Finalization" && (
+                      <button 
+                        className="nudge-btn"
+                        style={{ backgroundColor: "var(--accent-emerald)" }}
+                        onClick={() => {
+                          store.updateStudent(timeline.studentId, { iepFinalizedDate: getTodayISO() });
+                          pushActivity(`Finalized IEP on TN Pulse for ${timeline.studentName}.`);
+                        }}
+                        title="Mark IEP finalized today"
+                      >
+                        <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
+                        Finalize Today
+                      </button>
+                    )}
+                    {timeline.type === "IEP Print Glance" && (
+                      <button 
+                        className="nudge-btn"
+                        style={{ backgroundColor: "var(--accent-purple)" }}
+                        onClick={() => {
+                          store.updateStudent(timeline.studentId, { iepAtAGlancePrinted: true });
+                          pushActivity(`Marked IEP At-A-Glance printed for ${timeline.studentName}.`);
+                        }}
+                        title="Mark At-A-Glance printed"
+                      >
+                        <Printer size={10} style={{ display: "inline", marginRight: "4px" }} />
+                        Mark Printed
+                      </button>
+                    )}
+                    {timeline.type === "IEP Friday Signatures" && (
+                      <button 
+                        className="nudge-btn"
+                        style={{ backgroundColor: "var(--accent-purple)" }}
+                        onClick={() => {
+                          store.updateStudent(timeline.studentId, { iepAtAGlanceSignaturesCompleted: true });
+                          pushActivity(`Collected At-A-Glance teacher signatures for ${timeline.studentName}.`);
+                        }}
+                        title="Mark teacher signatures collected"
+                      >
+                        <CheckCircle size={10} style={{ display: "inline", marginRight: "4px" }} />
+                        Signatures Done
+                      </button>
+                    )}
+                    {timeline.type === "IEP SPED File" && (
+                      <button 
+                        className="nudge-btn"
+                        style={{ backgroundColor: "var(--accent-emerald)" }}
+                        onClick={() => {
+                          store.updateStudent(timeline.studentId, { iepPhysicalFileCompleted: true });
+                          pushActivity(`Archived physical SPED folder for ${timeline.studentName}.`);
+                        }}
+                        title="Mark physical SPED folder updated"
+                      >
+                        <FileCheck size={10} style={{ display: "inline", marginRight: "4px" }} />
+                        File Updated
+                      </button>
+                    )}
                     {timeline.actionNeeded === "Nudge Teacher" && (
                       <button 
                         className="nudge-btn"
@@ -860,59 +920,191 @@ export default function Dashboard({ students, screenings, updateScreening }) {
         {/* Right Column: In-App System notifications & quick actions */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           
-          {/* Friday Bulk IEP Signatures Checklist */}
+          {/* Post-Meeting Follow-Up & Filing Tracker */}
           <div className="glass-panel" style={{ border: "1px solid var(--accent-purple)" }}>
-            <h3 style={{ fontSize: "16px", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
+            <h3 style={{ fontSize: "16px", marginBottom: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
               <ClipboardList size={18} color="var(--accent-purple)" />
-              Friday Bulk "Glance" Signatures
+              Post-Meeting Follow-Up & Filing
             </h3>
             <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "12px" }}>
-              Ariel blocks Friday afternoons to collect non-attender signatures and file folders.
+              Post-IEP meeting compliance deadlines: At-A-Glance (+1d), PWN & Pulse Upload (+2d), Physical SPED File (+4d).
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {fridaySignatureStudents.map(student => (
-                <div key={student.id} style={{ 
-                  padding: "12px", 
-                  borderRadius: "8px", 
-                  border: "1px solid var(--border-color)", 
-                  backgroundColor: "var(--bg-primary)",
-                  fontSize: "13px"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "700", marginBottom: "6px" }}>
-                    <span>{student.name} ({student.grade})</span>
-                    <span style={{ color: "var(--accent-purple)", fontSize: "11px" }}>IEP Finalized</span>
+              {postMeetingStudents.map(student => {
+                const deadlines = store.getState().deadlines || DEFAULT_DEADLINES;
+                const finalizeBase = student.iepFinalizedDate || student.iepMeetingDate;
+                const glanceDue = finalizeBase ? addDays(finalizeBase, deadlines.iepAtAGlanceSignatures || 1) : "";
+                const uploadDue = finalizeBase ? addDays(finalizeBase, deadlines.iepPulseAndPwn || 2) : "";
+                const spedDue = finalizeBase ? addDays(finalizeBase, deadlines.iepPhysicalSpedFile || 4) : "";
+
+                const glanceDays = glanceDue ? getDaysRemaining(glanceDue) : null;
+                const uploadDays = uploadDue ? getDaysRemaining(uploadDue) : null;
+                const spedDays = spedDue ? getDaysRemaining(spedDue) : null;
+
+                const isFinalized = !!student.iepFinalizedDate;
+
+                return (
+                  <div key={student.id} style={{ 
+                    padding: "12px", 
+                    borderRadius: "8px", 
+                    border: "1px solid var(--border-color)", 
+                    backgroundColor: "var(--bg-primary)",
+                    fontSize: "13px"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: "700", marginBottom: "8px" }}>
+                      <span 
+                        style={{ cursor: "pointer", textDecoration: "underline", color: "var(--accent-purple)" }}
+                        onClick={() => handleTimelineClick({ studentId: student.id, type: "IEP At-A-Glance", category: "Active" })}
+                        title="Open in IEP Planner"
+                      >
+                        {student.name} ({student.grade})
+                      </span>
+                      {isFinalized ? (
+                        <span style={{ 
+                          fontSize: "10px", 
+                          padding: "2px 8px", 
+                          borderRadius: "12px", 
+                          backgroundColor: "rgba(16, 185, 129, 0.15)", 
+                          color: "var(--accent-emerald)", 
+                          fontWeight: "700" 
+                        }}>
+                          Finalized: {student.iepFinalizedDate}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: "10px", padding: "2px 8px" }}
+                          onClick={() => store.updateStudent(student.id, { iepFinalizedDate: getTodayISO() })}
+                          title="Lock finalized document today"
+                        >
+                          Finalize Today
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Step 1: At-A-Glance & Signatures (+1 Day) */}
+                    <div style={{ 
+                      padding: "8px", 
+                      borderRadius: "6px", 
+                      backgroundColor: "rgba(99, 102, 241, 0.05)", 
+                      border: "1px solid rgba(99, 102, 241, 0.15)",
+                      marginBottom: "8px"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>
+                        <span style={{ color: "var(--accent-purple)" }}>1. At-A-Glance & Signatures</span>
+                        <span style={{ color: glanceDays !== null && glanceDays < 0 ? "var(--accent-rose)" : "var(--text-muted)" }}>
+                          {glanceDays !== null && glanceDays < 0 ? `${Math.abs(glanceDays)}d OVERDUE` : `Due: ${glanceDue || "TBD"}`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "12px" }}>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepAtAGlancePrinted}
+                            onChange={(e) => store.updateStudent(student.id, { iepAtAGlancePrinted: e.target.checked })}
+                          />
+                          <span>IEP At-A-Glance Printed</span>
+                        </label>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepAtAGlanceSignaturesCompleted}
+                            onChange={(e) => store.updateStudent(student.id, { iepAtAGlanceSignaturesCompleted: e.target.checked })}
+                          />
+                          <span>Signatures ({student.classroomTeacher || "Teacher"})</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Step 2: Pulse, PWN & Parent Copy (+2 Days) */}
+                    <div style={{ 
+                      padding: "8px", 
+                      borderRadius: "6px", 
+                      backgroundColor: "rgba(245, 158, 11, 0.05)", 
+                      border: "1px solid rgba(245, 158, 11, 0.15)",
+                      marginBottom: "8px"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>
+                        <span style={{ color: "var(--accent-amber)" }}>2. Pulse, PWN & Parent Copy</span>
+                        <span style={{ color: uploadDays !== null && uploadDays < 0 ? "var(--accent-rose)" : "var(--text-muted)" }}>
+                          {uploadDays !== null && uploadDays < 0 ? `${Math.abs(uploadDays)}d OVERDUE` : `Due: ${uploadDue || "TBD"}`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "5px", fontSize: "12px" }}>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepPulseUploadCompleted}
+                            onChange={(e) => store.updateStudent(student.id, { iepPulseUploadCompleted: e.target.checked })}
+                          />
+                          <span>Upload Signed IEP to Pulse</span>
+                        </label>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepPwnWritten}
+                            onChange={(e) => store.updateStudent(student.id, { iepPwnWritten: e.target.checked })}
+                          />
+                          <span>Write Prior Written Notice (PWN)</span>
+                        </label>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepFinalCopySentParent}
+                            onChange={(e) => store.updateStudent(student.id, { iepFinalCopySentParent: e.target.checked })}
+                          />
+                          <span>Send Final Copy to Parent</span>
+                        </label>
+                        <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!student.iepSharePointUploadCompleted}
+                            onChange={(e) => store.updateStudent(student.id, { iepSharePointUploadCompleted: e.target.checked })}
+                          />
+                          <span>Upload to SharePoint</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Step 3: Update Physical SPED File (+4 Days) */}
+                    <div style={{ 
+                      padding: "8px", 
+                      borderRadius: "6px", 
+                      backgroundColor: "rgba(16, 185, 129, 0.05)", 
+                      border: "1px solid rgba(16, 185, 129, 0.15)",
+                      marginBottom: "10px"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "700", marginBottom: "6px" }}>
+                        <span style={{ color: "var(--accent-emerald)" }}>3. Update Physical SPED File</span>
+                        <span style={{ color: spedDays !== null && spedDays < 0 ? "var(--accent-rose)" : "var(--text-muted)" }}>
+                          {spedDays !== null && spedDays < 0 ? `${Math.abs(spedDays)}d OVERDUE` : `Due: ${spedDue || "TBD"}`}
+                        </span>
+                      </div>
+                      <label style={{ display: "flex", gap: "6px", alignItems: "center", cursor: "pointer", fontSize: "12px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={!!student.iepPhysicalFileCompleted}
+                          onChange={(e) => store.updateStudent(student.id, { iepPhysicalFileCompleted: e.target.checked })}
+                        />
+                        <span>Physical SPED Folder Updated</span>
+                      </label>
+                    </div>
+
+                    <button 
+                      className="btn btn-primary"
+                      style={{ width: "100%", padding: "6px", fontSize: "11px" }}
+                      onClick={() => handleFinalizePostMeetingTasks(student.id)}
+                    >
+                      Complete All Post-Meeting Tasks
+                    </button>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px", fontSize: "12px" }}>
-                    <label style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <input type="checkbox" defaultChecked={false} />
-                      <span>Glance Signed by {student.classroomTeacher}</span>
-                    </label>
-                    <label style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <input type="checkbox" defaultChecked={false} />
-                      <span>Upload Signatures to Pulse</span>
-                    </label>
-                    <label style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <input type="checkbox" defaultChecked={false} />
-                      <span>Upload Glance to SharePoint</span>
-                    </label>
-                    <label style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <input type="checkbox" defaultChecked={false} />
-                      <span>Update Physical SPED File</span>
-                    </label>
-                  </div>
-                  <button 
-                    className="btn btn-primary"
-                    style={{ width: "100%", padding: "5px", fontSize: "11px" }}
-                    onClick={() => handleFinalizeFridaySignatures(student.id)}
-                  >
-                    Conclude IEP & Update SPED File
-                  </button>
-                </div>
-              ))}
-              {fridaySignatureStudents.length === 0 && (
+                );
+              })}
+              {postMeetingStudents.length === 0 && (
                 <p style={{ color: "var(--text-muted)", fontSize: "12px", textAlign: "center", padding: "16px 0" }}>
-                  ✔ No IEP at a Glance signatures pending for this Friday.
+                  ✔ No post-meeting follow-up or filing tasks pending.
                 </p>
               )}
             </div>
