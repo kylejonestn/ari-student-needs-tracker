@@ -4,7 +4,7 @@
 
 import React, { useState } from "react";
 import { Search, Plus, UserPlus, BookOpen, Edit2, Check, FileText, ClipboardList, FileSpreadsheet, Upload, ArrowRight, Info, AlertCircle, Trash2, ArrowUpCircle, UserCheck, Archive, X, RefreshCw, Cloud, MessageSquare, ChevronDown, ChevronUp, StickyNote, ArrowUpDown, Download } from "lucide-react";
-import { guessTeacherEmail, store, normalizeToISODate } from "../utils/studentStore";
+import { guessTeacherEmail, store, normalizeToISODate, getDaysRemaining, addDays, getTodayISO } from "../utils/studentStore";
 
 export default function Students({ 
   students, 
@@ -775,7 +775,15 @@ export default function Students({
                 </span>
                 <span>
                   <label>IEP Due Date:</label>
-                  <span style={{ fontWeight: "600" }}>{student.iepDueDate}</span>
+                  <span style={{ 
+                    fontWeight: "600",
+                    color: (student.iepFinalizedDate || student.iepCompleted) 
+                      ? "var(--accent-emerald)" 
+                      : (getDaysRemaining(student.iepDueDate) <= 30 ? "var(--accent-rose)" : "inherit")
+                  }}>
+                    {student.iepDueDate || "Not Set"}
+                    {(student.iepFinalizedDate || student.iepCompleted) && " (✔ Done)"}
+                  </span>
                 </span>
                 <span>
                   <label>Accommodations:</label>
@@ -1146,11 +1154,44 @@ export default function Students({
                     />
                   </div>
                   <div>
-                    <label style={{ color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>IEP Due Date:</label>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <label style={{ color: "var(--text-muted)", margin: 0 }}>IEP Due Date:</label>
+                      {selectedStudent.iepFinalizedDate || selectedStudent.iepCompleted ? (
+                        <span style={{ fontSize: "10px", color: "var(--accent-emerald)", fontWeight: "600" }}>✔ Completed</span>
+                      ) : (
+                        <button
+                          type="button"
+                          style={{ background: "none", border: "none", color: "var(--accent-emerald)", fontSize: "10px", fontWeight: "600", cursor: "pointer", padding: 0 }}
+                          onClick={() => {
+                            const fDate = selectedStudent.iepMeetingDate || getTodayISO();
+                            const nextDue = addDays(fDate, 365);
+                            const updated = {
+                              ...selectedStudent,
+                              iepCompleted: true,
+                              iepFinalizedDate: fDate,
+                              iepDueDate: nextDue
+                            };
+                            setSelectedStudent(updated);
+                            updateStudent(selectedStudent.id, {
+                              iepCompleted: true,
+                              iepFinalizedDate: fDate,
+                              iepDueDate: nextDue
+                            });
+                          }}
+                        >
+                          Mark IEP Done (+1yr)
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="date"
                       className="input-field"
-                      style={{ padding: "6px 10px", fontSize: "12px", width: "100%", color: "var(--accent-amber)" }}
+                      style={{ 
+                        padding: "6px 10px", 
+                        fontSize: "12px", 
+                        width: "100%", 
+                        color: (selectedStudent.iepFinalizedDate || selectedStudent.iepCompleted) ? "var(--accent-emerald)" : "var(--accent-amber)" 
+                      }}
                       value={selectedStudent.iepDueDate || ""}
                       onChange={(e) => {
                         const updated = { ...selectedStudent, iepDueDate: e.target.value };

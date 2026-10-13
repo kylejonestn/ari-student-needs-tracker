@@ -275,9 +275,10 @@ export default function Dashboard({
 
   const activeDateRangeStr = formatDateRange(activeStartOfWeek, activeEndOfWeek);
 
-  // Items due within the currently selected week (excluding overdue items)
+  // Items due within the currently selected week (excluding overdue and completed items)
   const dueActiveWeekItems = rawTimelines.filter(t => {
     if (t.daysRemaining !== null && t.daysRemaining < 0) return false;
+    if (t.status === "completed" || t.isCompleted) return false;
     
     if (t.dueDate) {
       const dueDateObj = new Date(t.dueDate + "T12:00:00");
@@ -293,8 +294,8 @@ export default function Dashboard({
 
   const dueActiveWeekCount = dueActiveWeekItems.length;
 
-  // Overdue items
-  const overdueItems = rawTimelines.filter(t => t.daysRemaining !== null && t.daysRemaining < 0);
+  // Overdue items (excluding completed items)
+  const overdueItems = rawTimelines.filter(t => t.daysRemaining !== null && t.daysRemaining < 0 && t.status !== "completed" && !t.isCompleted);
   const overdueCount = overdueItems.length;
 
   // Combined default view (all overdue items + items due in the active selected week)
@@ -312,7 +313,6 @@ export default function Dashboard({
   const isTaskCheckable = (t) => {
     if (!t) return false;
     if (
-      t.type === "IEP Due Date" || 
       t.type === "Triennial Re-evaluation" || 
       t.type === "60-Day Evaluation" || 
       t.type === "Psychologist 60-Day Evaluation" ||
@@ -327,6 +327,23 @@ export default function Dashboard({
   const getTaskCompletionDiff = (t, studentOrScreening) => {
     if (t.category === "Active") {
       switch (t.type) {
+        case "IEP Due Date":
+        case "IEP Finalization": {
+          const finalDate = studentOrScreening.iepFinalizedDate || studentOrScreening.iepMeetingDate || getTodayISO();
+          const nextDue = addDays(finalDate, 365);
+          return {
+            updates: {
+              iepCompleted: true,
+              iepFinalizedDate: finalDate,
+              iepDueDate: nextDue
+            },
+            undoValues: {
+              iepCompleted: !!studentOrScreening.iepCompleted,
+              iepFinalizedDate: studentOrScreening.iepFinalizedDate || "",
+              iepDueDate: studentOrScreening.iepDueDate || ""
+            }
+          };
+        }
         case "August Setup":
           return {
             updates: { augustSetupComplete: true },
@@ -940,8 +957,13 @@ export default function Dashboard({
     const student = students.find(s => s.id === studentId);
     if (!student) return;
 
+    const finalizeDate = student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+    const nextDue = addDays(finalizeDate, 365);
+
     store.updateStudent(studentId, {
-      iepFinalizedDate: student.iepFinalizedDate || student.iepMeetingDate || getTodayISO(),
+      iepCompleted: true,
+      iepFinalizedDate: finalizeDate,
+      iepDueDate: nextDue,
       iepAtAGlancePrinted: true,
       iepAtAGlanceSignaturesCompleted: true,
       iepPulseUploadCompleted: true,
@@ -951,8 +973,25 @@ export default function Dashboard({
       iepPhysicalFileCompleted: true
     });
 
-    pushActivity(`Concluded all post-meeting filing & SPED File updates for ${student.name}.`);
-    alert(`All post-meeting tasks (Glance, Signatures, Pulse, PWN, Parent Copy, SPED File) marked complete for ${student.name}!`);
+    pushActivity(`Concluded all post-meeting filing & SPED File updates for ${student.name}. Next annual review calendared for ${nextDue}.`);
+    alert(`All post-meeting tasks (Glance, Signatures, Pulse, PWN, Parent Copy, SPED File) marked complete for ${student.name}! Next annual review calendared for ${nextDue}.`);
+  };
+
+  // Quick mark IEP complete from Dashboard
+  const handleMarkIepDone = (studentId, studentName) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const finalDate = student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+    const nextDue = addDays(finalDate, 365);
+
+    store.completeIep(studentId, { finalizedDate: finalDate, nextDueDate: nextDue });
+    pushActivity(`Marked IEP completed for ${studentName || student.name}. Next annual review calendared for ${nextDue}.`);
+    store.updateState({
+      toastMessage: `🎉 Marked IEP completed for ${studentName || student.name}! Next annual review calendared for ${nextDue}.`,
+      toastStudentId: null,
+      toastQuarter: null
+    });
   };
 
   const storeState = store.getState();
@@ -1631,13 +1670,37 @@ export default function Dashboard({
 
                     {/* Contextual Action Buttons */}
                     <div style={{ alignSelf: "center", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {!isCompleted && timeline.type === "IEP Due Date" && (
+                        <button 
+                          className="btn btn-secondary"
+                          style={{ 
+                            fontSize: "11px", 
+                            padding: "3px 8px", 
+                            display: "inline-flex", 
+                            alignItems: "center", 
+                            gap: "4px",
+                            color: "var(--accent-emerald)",
+                            borderColor: "var(--accent-emerald)",
+                            fontWeight: "600",
+                            backgroundColor: "rgba(16, 185, 129, 0.08)"
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMarkIepDone(timeline.studentId, timeline.studentName);
+                          }}
+                          title="Mark IEP as already completed and calendar next annual review (+365 days)"
+                        >
+                          <CheckCircle size={12} /> Mark IEP Done
+                        </button>
+                      )}
                       {!isCompleted && timeline.type === "IEP Finalization" && (
                         <button 
                           className="nudge-btn"
                           style={{ backgroundColor: "var(--accent-emerald)" }}
                           onClick={() => {
-                            store.updateStudent(timeline.studentId, { iepFinalizedDate: getTodayISO() });
-                            pushActivity(`Finalized IEP on TN Pulse for ${timeline.studentName}.`);
+                            const todayISO = getTodayISO();
+                            store.completeIep(timeline.studentId, { finalizedDate: todayISO });
+                            pushActivity(`Finalized IEP on TN Pulse for ${timeline.studentName}. Next annual review calendared for ${addDays(todayISO, 365)}.`);
                           }}
                           title="Mark IEP finalized today"
                         >

@@ -1034,3 +1034,76 @@ describe("Interactive Dashboard Checklists & Teaser Banner", () => {
     assert.equal(store.getState().interactiveChecklistMode, true);
   });
 });
+
+describe("Already-Completed IEP Handling & Due Date Rollover", () => {
+  it("should not mark IEP Due Date as overdue when IEP is already finalized", () => {
+    const pastStudent = {
+      id: "stu-iep-done",
+      name: "Riley Green",
+      status: "Active",
+      iepDueDate: "2026-10-01", // in the past relative to current date (2026-10-13)
+      iepMeetingDate: "2026-09-28",
+      iepFinalizedDate: "2026-09-28" // already finalized!
+    };
+
+    const timelines = calculateTimelines(pastStudent);
+    const iepDueTask = timelines.find(t => t.type === "IEP Due Date");
+    assert.ok(iepDueTask, "IEP Due Date timeline should exist");
+    assert.equal(iepDueTask.status, "completed", "Status must be completed, NOT overdue");
+    assert.equal(iepDueTask.isCompleted, true, "isCompleted must be true");
+    assert.notEqual(iepDueTask.status, "overdue", "Must not be overdue");
+    // Next due date should be 365 days after finalized date: 2027-09-28
+    assert.equal(iepDueTask.dueDate, "2027-09-28");
+    assert.ok(iepDueTask.daysRemaining > 300, "Days remaining should be next year");
+  });
+
+  it("should not mark IEP Due Date as overdue when iepCompleted is true", () => {
+    const completedStudent = {
+      id: "stu-iep-completed",
+      name: "Jordan Chase",
+      status: "Active",
+      iepDueDate: "2026-09-15",
+      iepCompleted: true
+    };
+
+    const timelines = calculateTimelines(completedStudent);
+    const iepDueTask = timelines.find(t => t.type === "IEP Due Date");
+    assert.ok(iepDueTask);
+    assert.equal(iepDueTask.status, "completed");
+    assert.notEqual(iepDueTask.status, "overdue");
+  });
+
+  it("should suppress August Setup and pre-meeting milestones when IEP is already completed", () => {
+    const student = {
+      id: "stu-aug-check",
+      name: "Casey Miller",
+      status: "Active",
+      iepDueDate: "2026-10-01",
+      iepFinalizedDate: "2026-09-25",
+      augustSetupComplete: false
+    };
+
+    const timelines = calculateTimelines(student);
+    const augSetup = timelines.find(t => t.type === "August Setup");
+    assert.equal(augSetup, undefined, "August Setup should not be generated for already-completed IEP");
+  });
+
+  it("should update student with completeIep and advance iepDueDate by 365 days", () => {
+    const store = new StudentStore();
+    store.addStudent({
+      id: "stu-complete-test",
+      name: "Sam Houston",
+      iepDueDate: "2026-10-05",
+      iepMeetingDate: "2026-10-04"
+    });
+
+    const student = store.getState().students.find(s => s.name === "Sam Houston");
+    store.completeIep(student.id, { finalizedDate: "2026-10-04" });
+
+    const updated = store.getState().students.find(s => s.id === student.id);
+    assert.equal(updated.iepCompleted, true);
+    assert.equal(updated.iepFinalizedDate, "2026-10-04");
+    assert.equal(updated.iepDueDate, "2027-10-04", "iepDueDate should be advanced by 365 days");
+  });
+});
+

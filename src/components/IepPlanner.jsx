@@ -234,6 +234,24 @@ export default function IepPlanner({ students = [], updateStudent }) {
     alert(`Re-evaluation completed successfully for ${student.name}! The next triennial evaluation has been calendared for ${newReevalDueDate}.`);
   };
 
+  const handleQuickCompleteIep = (student) => {
+    if (!student) return;
+    const finalDate = student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+    const nextDue = addDays(finalDate, 365);
+
+    updateStudent(student.id, {
+      iepCompleted: true,
+      iepFinalizedDate: finalDate,
+      iepDueDate: nextDue
+    });
+
+    store.updateState({
+      toastMessage: `🎉 Marked IEP complete for ${student.name}! Next annual review calendared for ${nextDue}.`,
+      toastStudentId: null,
+      toastQuarter: null
+    });
+  };
+
   // Sync with global store selection changes (e.g. clicked on dashboard link)
   React.useEffect(() => {
     const checkGlobalSelection = () => {
@@ -893,15 +911,37 @@ export default function IepPlanner({ students = [], updateStudent }) {
                   style={{ fontSize: "12px" }}
                 />
               </div>
-              <div style={{ display: "flex", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 {student.iepFinalizedDate ? (
-                  <span style={{ fontSize: "12px", color: "var(--accent-emerald)", fontWeight: "600" }}>
-                    ✔ IEP document locked & finalized on {student.iepFinalizedDate}
-                  </span>
+                  <div>
+                    <span style={{ fontSize: "12px", color: "var(--accent-emerald)", fontWeight: "600", display: "block" }}>
+                      ✔ IEP document locked & finalized on {student.iepFinalizedDate}
+                    </span>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)", display: "block" }}>
+                      Next Annual Review: <strong>{student.iepDueDate || addDays(student.iepFinalizedDate, 365)}</strong>
+                    </span>
+                  </div>
                 ) : (
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
-                    Meeting date: <strong>{student.iepMeetingDate || student.reevalMeetingDate || "Date TBD"}</strong>
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                      Meeting date: <strong>{student.iepMeetingDate || student.reevalMeetingDate || "Date TBD"}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ fontSize: "11px", padding: "4px 8px" }}
+                      onClick={() => {
+                        const finalDate = student.iepMeetingDate || getTodayISO();
+                        updateStudent(student.id, {
+                          iepFinalizedDate: finalDate,
+                          iepCompleted: true,
+                          iepDueDate: addDays(finalDate, 365)
+                        });
+                      }}
+                    >
+                      Finalize Today & Calendar Next Year (+1 Year)
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -1424,7 +1464,39 @@ export default function IepPlanner({ students = [], updateStudent }) {
                   <div className="timeline-student-meta">
                     <span>Grade: <strong>{student.grade}</strong></span>
                     <span>Teacher: <strong>{student.classroomTeacher}</strong></span>
-                    <span>IEP Due Date: <strong style={{ color: getDaysRemaining(student.iepDueDate) <= 30 ? "var(--accent-rose)" : "inherit" }}>{student.iepDueDate || "Not Set"}</strong></span>
+                    {(student.iepFinalizedDate || student.iepCompleted || currentStageIndex >= currentStages.length) ? (
+                      <span style={{ color: "var(--accent-emerald)", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        ✔ IEP Done • Next Review: <strong>{student.iepDueDate || addDays(student.iepFinalizedDate || getTodayISO(), 365)}</strong>
+                      </span>
+                    ) : (
+                      <>
+                        <span>IEP Due Date: <strong style={{ color: getDaysRemaining(student.iepDueDate) <= 30 ? "var(--accent-rose)" : "inherit" }}>{student.iepDueDate || "Not Set"}</strong></span>
+                        {!student.isReeval && (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ 
+                              fontSize: "11px", 
+                              padding: "2px 8px", 
+                              color: "var(--accent-emerald)", 
+                              borderColor: "var(--accent-emerald)", 
+                              fontWeight: "600",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              backgroundColor: "rgba(16, 185, 129, 0.08)"
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickCompleteIep(student);
+                            }}
+                            title="Mark IEP as already completed and calendar next annual review (+365 days)"
+                          >
+                            ✔ Mark IEP Done
+                          </button>
+                        )}
+                      </>
+                    )}
                     {student.iepMeetingDate && !student.isReeval && (
                       <span style={{ color: "var(--accent-purple)" }}>
                         Meeting: <strong>{student.iepMeetingDate}</strong>

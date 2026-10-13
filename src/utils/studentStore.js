@@ -437,9 +437,12 @@ export const calculateTimelines = (student, isScreening = false) => {
     // ACTIVE STUDENT WORKFLOW TIMELINES
     // ------------------------------------------
     
-    // August Setup Tasks (Show in August or if not complete)
+    // Check if the current IEP cycle has already been completed / finalized
+    const isIepAlreadyDone = !!student.iepFinalizedDate || !!student.iepCompleted || !!student.iepPhysicalFileCompleted;
+
+    // August Setup Tasks (Show in August or if not complete, only if IEP is not already completed for the year)
     const currentMonth = new Date().getMonth(); // 7 = August
-    if ((currentMonth === 7 || !student.augustSetupComplete) && !student.iepMeetingDate) {
+    if (!isIepAlreadyDone && (currentMonth === 7 || !student.augustSetupComplete) && !student.iepMeetingDate) {
       timelines.push({
         type: "August Setup",
         label: "August Proposed Dates Letter",
@@ -462,21 +465,35 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // IEP Due Date (365 days)
     if (student.iepDueDate) {
-      const daysLeft = getDaysRemaining(student.iepDueDate);
+      let effectiveIepDueDate = student.iepDueDate;
+
+      if (isIepAlreadyDone) {
+        const finalizeDate = student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+        const nextAnnualDueDate = addDays(finalizeDate, 365);
+        // If stored iepDueDate was for the completed cycle (already in past or older/equal to finalizeDate)
+        if (effectiveIepDueDate <= finalizeDate || getDaysRemaining(effectiveIepDueDate) <= 0) {
+          effectiveIepDueDate = nextAnnualDueDate;
+        }
+      }
+
+      const daysLeft = getDaysRemaining(effectiveIepDueDate);
       timelines.push({
         type: "IEP Due Date",
-        label: "IEP Due Date",
-        desc: "Mandatory annual update of IEP goals, accommodations, and special education services.",
-        dueDate: student.iepDueDate,
+        label: isIepAlreadyDone ? "Next Annual IEP Review" : "IEP Due Date",
+        desc: isIepAlreadyDone
+          ? "Next annual update of IEP goals and special education services (completed for this cycle)."
+          : "Mandatory annual update of IEP goals, accommodations, and special education services.",
+        dueDate: effectiveIepDueDate,
         daysRemaining: daysLeft,
-        status: daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track",
-        mandatory: true
+        status: isIepAlreadyDone ? "completed" : (daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track"),
+        mandatory: !isIepAlreadyDone,
+        isCompleted: isIepAlreadyDone
       });
     }
 
     // Individual meeting & document workflow milestones (runs for both IEP & Re-eval when a meeting date is scheduled)
     const effectiveMeetingDate = student.isReeval ? (student.reevalMeetingDate || student.iepMeetingDate) : student.iepMeetingDate;
-    if (effectiveMeetingDate && !student.iepFinalizedDate) {
+    if (effectiveMeetingDate && !student.iepFinalizedDate && !student.iepCompleted) {
       const mDate = effectiveMeetingDate;
 
       // 1. Send Invitation (only for regular IEP - re-eval invitation handled below in re-eval section)
@@ -663,31 +680,45 @@ export const calculateTimelines = (student, isScreening = false) => {
 
     // Triennial Re-evaluation (3 years)
     if (student.isReeval) {
-      const daysLeft = getDaysRemaining(student.reevalDueDate);
-      timelines.push({
-        type: "Triennial Re-evaluation",
-        label: "Triennial Re-eval Review",
-        desc: "Mandatory three-year eligibility assessment review.",
-        dueDate: student.reevalDueDate,
-        daysRemaining: daysLeft,
-        status: daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track",
-        mandatory: true
-      });
+      let effectiveReevalDueDate = student.reevalDueDate;
+      const isReevalDone = !!student.reevalMeetingCompleted;
 
-      // Triennial Re-eval workflow milestones (triggered if a reeval meeting date is set)
-      if (!student.reevalMeetingDate) {
-        const schedDue = addDays(student.reevalDueDate, -14);
-        const schedDays = getDaysRemaining(schedDue);
+      if (isReevalDone && effectiveReevalDueDate && getDaysRemaining(effectiveReevalDueDate) <= 0) {
+        const finalizeDate = student.iepFinalizedDate || student.reevalMeetingDate || getTodayISO();
+        effectiveReevalDueDate = addDays(finalizeDate, 3 * 365);
+      }
+
+      if (effectiveReevalDueDate) {
+        const daysLeft = getDaysRemaining(effectiveReevalDueDate);
         timelines.push({
-          type: "Re-eval Schedule",
-          label: "Schedule Re-eval Meeting",
-          desc: "Schedule the triennial re-evaluation meeting date (typically 2 weeks before due date).",
-          dueDate: schedDue,
-          daysRemaining: schedDays,
-          status: schedDays <= 0 ? "overdue" : schedDays <= 5 ? "warning" : "on-track",
-          mandatory: false
+          type: "Triennial Re-evaluation",
+          label: isReevalDone ? "Next Triennial Re-evaluation" : "Triennial Re-eval Review",
+          desc: isReevalDone
+            ? "Next three-year eligibility assessment review (completed for this cycle)."
+            : "Mandatory three-year eligibility assessment review.",
+          dueDate: effectiveReevalDueDate,
+          daysRemaining: daysLeft,
+          status: isReevalDone ? "completed" : (daysLeft <= 0 ? "overdue" : daysLeft <= 7 ? "warning" : "on-track"),
+          mandatory: !isReevalDone,
+          isCompleted: isReevalDone
         });
-      } else {
+      }
+
+      // Triennial Re-eval workflow milestones (triggered if a reeval meeting date is set and not completed)
+      if (!isReevalDone) {
+        if (!student.reevalMeetingDate) {
+          const schedDue = effectiveReevalDueDate ? addDays(effectiveReevalDueDate, -14) : "";
+          const schedDays = schedDue ? getDaysRemaining(schedDue) : null;
+          timelines.push({
+            type: "Re-eval Schedule",
+            label: "Schedule Re-eval Meeting",
+            desc: "Schedule the triennial re-evaluation meeting date (typically 2 weeks before due date).",
+            dueDate: schedDue,
+            daysRemaining: schedDays,
+            status: schedDays !== null && schedDays <= 0 ? "overdue" : (schedDays !== null && schedDays <= 5 ? "warning" : "on-track"),
+            mandatory: false
+          });
+        } else {
         const rmDate = student.reevalMeetingDate;
 
         // 1. Send invitation (20 days out)
@@ -750,6 +781,7 @@ export const calculateTimelines = (student, isScreening = false) => {
         }
       }
     }
+  }
 
     // Check quarterly progress reports for report cards
     const reportCardDates = (store && store.state && store.state.reportCardDates) || DEFAULT_REPORT_CARD_DATES;
@@ -2000,6 +2032,26 @@ export class StudentStore {
       fieldsToUpdate.iepInvitationSentDate = fieldsToUpdate.reevalInvitationSentDate;
     }
 
+    // Auto-rollover IEP due date when finalized/completed if not explicitly set
+    if (fieldsToUpdate.iepFinalizedDate && fieldsToUpdate.iepDueDate === undefined) {
+      const student = this.state.students.find(s => s.id === studentId);
+      if (student) {
+        fieldsToUpdate.iepCompleted = true;
+        if (!student.iepDueDate || student.iepDueDate <= fieldsToUpdate.iepFinalizedDate || getDaysRemaining(student.iepDueDate) <= 0) {
+          fieldsToUpdate.iepDueDate = addDays(fieldsToUpdate.iepFinalizedDate, 365);
+        }
+      }
+    } else if (fieldsToUpdate.iepCompleted === true && fieldsToUpdate.iepDueDate === undefined) {
+      const student = this.state.students.find(s => s.id === studentId);
+      if (student) {
+        const finalizeDate = fieldsToUpdate.iepFinalizedDate || student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+        fieldsToUpdate.iepFinalizedDate = finalizeDate;
+        if (!student.iepDueDate || student.iepDueDate <= finalizeDate || getDaysRemaining(student.iepDueDate) <= 0) {
+          fieldsToUpdate.iepDueDate = addDays(finalizeDate, 365);
+        }
+      }
+    }
+
     const updated = this.state.students.map(s => {
       if (s.id === studentId) {
         return { ...s, ...fieldsToUpdate, updatedAt: new Date().toISOString() };
@@ -2008,6 +2060,26 @@ export class StudentStore {
     });
     this.updateState({ students: updated });
     this.triggerCloudSave();
+  }
+
+  // Complete IEP for current cycle & calendar next annual review
+  completeIep(studentId, options = {}) {
+    const student = this.state.students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const finalizedDate = options.finalizedDate || student.iepFinalizedDate || student.iepMeetingDate || getTodayISO();
+    const nextDueDate = options.nextDueDate || addDays(finalizedDate, 365);
+
+    const updates = {
+      iepCompleted: true,
+      iepFinalizedDate: finalizedDate,
+      iepDueDate: nextDueDate,
+      iepDraftWrittenDate: student.iepDraftWrittenDate || finalizedDate,
+      iepDraftSentDate: student.iepDraftSentDate || finalizedDate,
+      ...(options.additionalFields || {})
+    };
+
+    this.updateStudent(studentId, updates);
   }
 
   // Remove student from Active List (soft delete tombstone)
